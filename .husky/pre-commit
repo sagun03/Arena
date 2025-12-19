@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run frontend lint-staged (only on staged files)
+cd frontend && npx lint-staged
+
+# Run backend pre-commit (only on staged files)
+cd ../backend && unset UV_EXTRA_INDEX_URL && uv run pre-commit run || exit 1

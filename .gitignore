@@ -69,4 +69,5 @@ Thumbs.db
 *.tmp
 *.temp
 .cache/
-
+backend/uv.lock
+frontend/package-lock.json

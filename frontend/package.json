@@ -1,0 +1,51 @@
+{
+  "name": "arena-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "echo 'Linting disabled for now'",
+    "prepare": "cd .. && husky || true"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "latest",
+    "@react-stately/utils": "^3.10.8",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@untitledui/icons": "^0.0.19",
+    "assistant-ui": "latest",
+    "autoprefixer": "^10.4.23",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "next": "16.0.0",
+    "next-themes": "^0.4.6",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-aria-components": "^1.13.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^3.4.0",
+    "tailwindcss-animate": "^1.0.7",
+    "typescript": "^5.3.0",
+    "zustand": "^4.4.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-config-next": "16.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.{json,css,md}": [
+      "prettier --write"
+    ]
+  }
+}

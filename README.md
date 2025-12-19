@@ -31,10 +31,24 @@ User → Frontend (Next.js) → Backend (FastAPI) → LangGraph → Agents (Gemi
 
 ## 🛠️ Tech Stack
 
-**Backend:** Python, FastAPI, LangChain, LangGraph, Google Gemini, Redis, ChromaDB, LangSmith  
+**Backend:** Python, FastAPI, LangChain, LangGraph, Google Gemini, Redis, ChromaDB, LangSmith
 **Frontend:** Next.js 16, TypeScript, Assistant UI, Tailwind CSS
 
 ## 🚀 Quick Start
+
+### Quick Commands
+
+```bash
+# Install dependencies
+cd backend && unset UV_EXTRA_INDEX_URL && uv sync
+cd frontend && npm install
+
+# Start servers
+cd backend && unset UV_EXTRA_INDEX_URL && uv run uvicorn src.arena.main:app --reload
+cd frontend && npm run dev  # In another terminal
+```
+
+See [COMMANDS.md](./COMMANDS.md) for full command reference.
 
 ### Prerequisites
 - Python 3.11+, Node.js 18+
@@ -150,4 +164,3 @@ Licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for deta
 ---
 
 **Remember**: ARENA is designed to be harsh, not helpful. If your idea survives ARENA's adversarial reasoning, you've likely found something worth building.
-

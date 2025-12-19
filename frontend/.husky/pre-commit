@@ -1,0 +1,2 @@
+cd frontend && npx lint-staged || exit 1
+cd ../backend && unset UV_EXTRA_INDEX_URL && uv run pre-commit run || exit 1
