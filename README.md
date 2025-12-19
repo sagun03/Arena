@@ -1,0 +1,153 @@
+# ARENA – Agentic Idea Validation Platform
+
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+> **"Disagree by default. Validate ideas through structured adversarial reasoning, not optimism."**
+
+ARENA is a multi-agent system that stress-tests business ideas through structured debate. Unlike traditional validators that reinforce optimism, ARENA forces disagreement, surfaces weak logic, and produces evidence-backed verdicts.
+
+## 🎯 What It Does
+
+Submit your business idea → ARENA runs it through a 5-round adversarial debate → Get a verdict: **Proceed / Pivot / Kill / Needs More Data**
+
+## ✨ Key Features
+
+- **5-Round Debate Protocol**: Clarification → Attacks → Defense → Cross-Examination → Verdict
+- **Multi-Agent Architecture**: Orchestrator (LangGraph) + Supervisor (Judge) + Workers (Skeptic, Customer, Market, Builder)
+- **Evidence Tagging**: Every claim tagged as Verified, Assumption, or NeedsValidation
+- **Clear Outputs**: Scorecard (0-100), Top 5 Kill-Shots, Assumptions List, 7-Day Test Plan
+- **Real-time Updates**: Live debate progress via Redis pub/sub
+- **Beautiful UI**: Next.js 16 with Assistant UI
+
+## 🏗️ Architecture
+
+```
+User → Frontend (Next.js) → Backend (FastAPI) → LangGraph → Agents (Gemini)
+                                              ↓
+                                         Redis (State)
+                                         ChromaDB (Evidence)
+                                         LangSmith (Tracing)
+```
+
+## 🛠️ Tech Stack
+
+**Backend:** Python, FastAPI, LangChain, LangGraph, Google Gemini, Redis, ChromaDB, LangSmith  
+**Frontend:** Next.js 16, TypeScript, Assistant UI, Tailwind CSS
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11+, Node.js 18+
+- `uv` package manager
+- Redis (local or Docker)
+- Google Gemini API key
+
+### Local Development
+
+```bash
+# Clone repository
+git clone https://github.com/sagun03/Arena.git
+cd Arena
+
+# Backend
+cd backend
+uv sync
+cp .env.example .env  # Add your API keys
+uv run uvicorn src.arena.main:app --reload
+
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+
+# Or use Docker Compose
+docker-compose up
+```
+
+### Deploy to Cloud Run
+
+```bash
+# Setup Redis (Memorystore)
+gcloud redis instances create arena-redis --region=us-central1
+
+# Deploy Backend
+cd backend
+gcloud run deploy arena-backend --source .
+
+# Deploy Frontend
+cd frontend
+gcloud run deploy arena-frontend --source .
+```
+
+## 📖 Usage
+
+### API Example
+
+```bash
+POST /arena/validate
+{
+  "idea": "A platform connecting freelance designers with clients",
+  "target_customer": "Small businesses",
+  "market": "Global",
+  "pricing_assumption": "$50-200 per project"
+}
+```
+
+### Response
+
+```json
+{
+  "verdict": {
+    "decision": "Pivot",
+    "score": 42,
+    "kill_shots": ["Market saturated", "High CAC", "No differentiation"],
+    "assumptions": ["Customers willing to pay", "Designers will join"],
+    "test_plan": { "day_1": "...", ... }
+  }
+}
+```
+
+## 🎨 UI Preview
+
+- **Debate Timeline**: Real-time visualization of debate rounds
+- **Interactive Graph**: LangGraph state machine visualization
+- **Agent Responses**: Color-coded messages from each agent
+- **Evidence Tags**: Visual badges for Verified/Assumption/NeedsValidation
+- **Verdict Display**: Scorecard, kill-shots, and test plan
+
+## 🔧 Configuration
+
+Environment variables:
+- `GOOGLE_API_KEY` - Gemini API key
+- `REDIS_HOST` - Redis connection (localhost for dev, Memorystore IP for prod)
+- `LANGSMITH_API_KEY` - Optional, for observability
+
+## 📊 Observability
+
+- **LangSmith**: Automatic tracing of all agent calls
+- **Cloud Monitoring**: Performance and error tracking
+- **Redis**: Real-time state monitoring
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
+
+## 📝 Key Principles
+
+1. **Disagree by Default** - Agents challenge, not agree
+2. **Evidence Over Confidence** - Every claim explicitly tagged
+3. **Controlled Orchestration** - Structured debate protocol
+4. **Decision-Oriented** - Goal is verdict, not inspiration
+
+## 📄 License
+
+Licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+---
+
+**Remember**: ARENA is designed to be harsh, not helpful. If your idea survives ARENA's adversarial reasoning, you've likely found something worth building.
+
