@@ -24,10 +24,22 @@ cp .env.example .env
 
 3. Run the server:
 ```bash
+# Option 1: Use the start script (recommended)
+./start.sh
+
+# Option 2: Use uv directly
 uv run uvicorn src.arena.main:app --reload
+
+# Option 3: Custom host/port
+./start.sh --host 0.0.0.0 --port 8000
 ```
 
 Server will be available at `http://localhost:8000`
+
+**API Documentation:**
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+- OpenAPI Schema: http://localhost:8000/openapi.json
 
 ## Project Structure
 
@@ -49,9 +61,8 @@ backend/
 
 ## Available Commands
 
-- `make install` - Install dependencies
-- `make dev` - Start development server
-- `make test` - Run tests
-- `make lint` - Run linters
-- `make format` - Format code
-- `make clean` - Clean up generated files
+- `./start.sh` - Start the development server (with auto-reload)
+- `./start.sh --port 8080` - Start server on custom port
+- `./start.sh --no-reload` - Start server without auto-reload (production mode)
+- `./setup.sh` - Install dependencies
+- `uv sync` - Sync dependencies manually

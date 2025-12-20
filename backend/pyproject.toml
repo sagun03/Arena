@@ -28,6 +28,7 @@ dev = [
     "flake8>=7.0.0",
     "isort>=5.13.0",
     "mypy>=1.8.0",
+    "types-redis>=4.6.0",
 ]
 
 [build-system]
@@ -46,3 +47,7 @@ target-version = ["py311"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 asyncio_mode = "auto"
+
+[tool.mypy]
+ignore_missing_imports = true
+no_strict_optional = true
