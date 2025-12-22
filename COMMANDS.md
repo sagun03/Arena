@@ -64,6 +64,7 @@ unset UV_EXTRA_INDEX_URL && uv run pre-commit run --all-files
 # Frontend linter
 cd frontend
 npm run lint
+cd "/Users/sagunsaluja/ARENA project/frontend" && pkill -f "next dev" && sleep 2 && echo "Killed existing Next.js processes"
 ```
 
 ### Formatting

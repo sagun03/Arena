@@ -1,0 +1,77 @@
+"""Base worker agent class"""
+
+from typing import Optional
+
+from arena.agents.base_agent import BaseAgent
+from langchain_core.language_models import BaseChatModel
+
+
+class BaseWorkerAgent(BaseAgent):
+    """
+    Base worker agent class.
+
+    Worker agents (Skeptic, Customer, Market, Builder) extend this class.
+    They execute specialized tasks and their outputs are validated by the Judge supervisor.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        role: str,
+        llm: BaseChatModel,
+        prompt_template: str,
+        debate_id: Optional[str] = None,
+    ):
+        """
+        Initialize worker agent.
+
+        Args:
+            name: Agent name (e.g., "Skeptic", "Customer")
+            role: Agent role description
+            llm: LangChain LLM instance
+            prompt_template: Prompt template for this agent
+            debate_id: Optional debate ID for evidence filtering
+        """
+        super().__init__(name=name, role=role, llm=llm, debate_id=debate_id)
+        self.prompt_template = prompt_template
+
+    async def execute(
+        self,
+        idea_text: str,
+        extracted_structure: dict,
+        previous_context: Optional[dict] = None,
+        round_number: int = 2,
+    ) -> dict:
+        """
+        Execute worker agent task.
+
+        Args:
+            idea_text: Original PRD text
+            extracted_structure: Extracted structure from PRD (dict)
+            previous_context: Context from previous rounds
+            round_number: Current debate round number
+
+        Returns:
+            Processed response with evidence tags
+        """
+        # Convert extracted_structure to JSON string for prompt
+        import json
+
+        extracted_structure_str = json.dumps(extracted_structure, indent=2)
+        previous_context_str = json.dumps(previous_context, indent=2) if previous_context else "{}"
+
+        # Format prompt
+        prompt = self.format_prompt(
+            self.prompt_template,
+            idea_text=idea_text,
+            extracted_structure=extracted_structure_str,
+            previous_context=previous_context_str,
+        )
+
+        # Invoke LLM
+        response = await self.invoke(prompt)
+
+        # Process response (parse, extract evidence, store)
+        result = await self.process_response(response, round_number)
+
+        return result

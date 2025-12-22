@@ -1,6 +1,13 @@
 """Arena endpoints"""
 
-from fastapi import APIRouter
+import uuid
+from datetime import datetime
+from typing import Any, Dict
+
+from arena.llm.prd_extractor import extract_idea_from_prd
+from arena.models.verdict import Verdict
+from arena.state_manager import get_debate_state, save_debate_state
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -23,15 +30,17 @@ class DebateResponse(BaseModel):
     """Response model for debate state"""
 
     debate_id: str = Field(..., description="Unique identifier for the debate")
-    status: str = Field(..., description="Current status of the debate")
-    message: str = Field(..., description="Status message")
+    status: str = Field(..., description="Status: pending, in_progress, completed, failed")
+    transcript: list = Field(default_factory=list, description="Debate transcript")
+    error: str | None = Field(None, description="Error message if debate failed")
 
 
 class VerdictResponse(BaseModel):
     """Response model for verdict"""
 
     debate_id: str = Field(..., description="Unique identifier for the debate")
-    verdict: str = Field(..., description="Final verdict")
+    verdict: Verdict | None = Field(None, description="Final verdict if completed")
+    status: str = Field(..., description="Status: pending, completed, failed")
     message: str = Field(..., description="Status message")
 
 
@@ -59,10 +68,31 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
     Returns:
         IdeaValidationResponse: Response containing debate ID
     """
-    # TODO: Implement idea validation
-    return IdeaValidationResponse(
-        debate_id="temp-debate-id", message="Idea validation endpoint - coming soon"
-    )
+    try:
+        # Generate unique debate ID
+        debate_id = str(uuid.uuid4())
+
+        # Extract PRD structure
+        idea = await extract_idea_from_prd(request.prd_text)
+
+        # Create initial debate state
+        initial_state: Dict[str, Any] = {
+            "idea": idea,
+            "debate_id": debate_id,
+            "status": "pending",
+            "transcript": [],
+            "started_at": datetime.utcnow().isoformat(),
+        }
+
+        # Save initial state
+        await save_debate_state(debate_id, initial_state)
+
+        return IdeaValidationResponse(
+            debate_id=debate_id,
+            message="Debate session created successfully. Use debate_id to track progress.",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to start debate: {str(e)}")
 
 
 @router.get(
@@ -83,10 +113,20 @@ async def get_debate(
 
     Returns:
         DebateResponse: Current state of the debate
+
+    Raises:
+        HTTPException: If debate not found
     """
-    # TODO: Implement debate retrieval
+    state_dict = await get_debate_state(debate_id)
+
+    if not state_dict:
+        raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+
     return DebateResponse(
-        debate_id=debate_id, status="pending", message="Debate retrieval - coming soon"
+        debate_id=debate_id,
+        status=state_dict.get("status", "pending"),
+        transcript=state_dict.get("transcript", []),
+        error=state_dict.get("error"),
     )
 
 
@@ -108,8 +148,34 @@ async def get_verdict(
 
     Returns:
         VerdictResponse: Final verdict and recommendations
+
+    Raises:
+        HTTPException: If debate not found or verdict not ready
     """
-    # TODO: Implement verdict retrieval
-    return VerdictResponse(
-        debate_id=debate_id, verdict="pending", message="Verdict retrieval - coming soon"
-    )
+    state_dict = await get_debate_state(debate_id)
+
+    if not state_dict:
+        raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+
+    status = state_dict.get("status", "pending")
+    verdict_dict = state_dict.get("verdict")
+
+    if status != "completed" or not verdict_dict:
+        return VerdictResponse(
+            debate_id=debate_id,
+            verdict=None,
+            status=status,
+            message="Debate is still in progress or not completed yet.",
+        )
+
+    # Convert verdict dict to Verdict model
+    try:
+        verdict = Verdict(**verdict_dict)
+        return VerdictResponse(
+            debate_id=debate_id,
+            verdict=verdict,
+            status="completed",
+            message="Verdict available",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse verdict: {str(e)}")
