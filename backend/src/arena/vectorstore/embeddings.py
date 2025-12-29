@@ -19,7 +19,7 @@ def get_embedding_function() -> GoogleGenerativeAIEmbeddings:
     global _embedding_function
     if _embedding_function is None:
         _embedding_function = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model=settings.embedding_model,
             google_api_key=settings.google_api_key,
         )
     return _embedding_function

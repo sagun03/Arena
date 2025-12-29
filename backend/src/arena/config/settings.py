@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     # ChromaDB
     chromadb_path: str = "./chroma_db"
 
+    embedding_model: str = "models/embedding-001"
+
     # Application
     environment: str = "development"
     log_level: str = "INFO"
