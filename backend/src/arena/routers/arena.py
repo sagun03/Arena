@@ -348,6 +348,7 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
         debate_id = str(uuid.uuid4())
 
         # Create initial debate state
+        idea_title = "Untitled Idea"
         initial_state: Dict[str, Any] = {
             "debate_id": debate_id,
             "status": "pending",
@@ -358,19 +359,8 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
             "requested_domain": request.domain,
         }
 
-        # Best-effort: extract idea title up front so UI can show name not ID
-        idea_title = "Untitled Idea"
-        try:
-            idea = await extract_idea_from_prd(request.prd_text, debate_id=debate_id)
-            idea_title = idea.extracted_structure.metadata.get("title", idea_title)
-            initial_state["idea_title"] = idea_title
-            # Persist extracted structure for deduping later
-            initial_state["extracted_structure"] = idea.extracted_structure.model_dump()
-        except Exception:
-            # If extraction fails, continue without blocking
-            pass
-
-        # Save initial state (with optional idea_title)
+        # Save initial state without blocking on LLM extraction so the request returns fast
+        initial_state["idea_title"] = idea_title
         await save_debate_state(debate_id, initial_state)
 
         # Start background debate execution (non-blocking)
