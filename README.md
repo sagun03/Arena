@@ -138,27 +138,6 @@ Environment variables:
 - **State Management**: In-memory tracking during MVP phase
 - **ChromaDB**: Evidence storage and vector similarity search
 
-## 🔄 Recent Changes (Latest Commit)
-
-**December 2025 - Simplification & Cleanup**
-
-✅ **Removed:**
-- Redis dependency and all Redis-related code
-- LangSmith observability framework
-- LangGraph orchestration (simplified to direct agent execution)
-
-✅ **Added:**
-- In-memory state manager for MVP development
-- Comprehensive test suite (7 test files)
-- Lightweight, zero-dependency core
-
-✅ **Result:**
-- Faster development cycle
-- Reduced external dependencies
-- Easy migration path to persistent database when needed
-
-See commit `0f7ed7b` for details.
-
 ## 🤝 Contributing
 
 1. Fork the repository
