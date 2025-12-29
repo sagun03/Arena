@@ -485,7 +485,7 @@ export default function VerdictPage() {
                               badge: 'from-yellow-600 to-orange-600',
                             }
                           }
-                          const colors = getSeverityColor(shot.severity)
+                          const colors = getSeverityColor(shot.severity || 'medium')
                           return (
                             <div
                               key={i}

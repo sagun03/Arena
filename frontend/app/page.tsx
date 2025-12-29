@@ -881,18 +881,19 @@ export default function Home() {
         </Container>
       </Section>
 
-      {/* Testimonials */}
+      {/* Testimonials / Early Adopter Stories */}
       <Section className="bg-gray-50 dark:bg-gray-800">
         <Container>
           <div className="text-center mb-16">
             <Badge variant="brand" className="mb-4">
-              Testimonials
+              Stories
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              What Founders Say
+              It Could Be You
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300">
-              Real feedback from real entrepreneurs.
+              These could be your results. Join early adopters shaping the future of idea
+              validation.
             </p>
           </div>
 
@@ -900,43 +901,65 @@ export default function Home() {
             {[
               {
                 quote:
-                  'ARENA saved me 6 months of development time by killing my idea before I built it. The kill-shots were spot-on.',
-                author: 'Sarah Chen',
-                role: 'Founder, TechFlow',
-                rating: 5,
+                  'Could save you months by validating ideas before you build them. Get honest feedback on your concept.',
+                potential: 'Potential Founder',
+                result: 'After trying ARENA',
+                emoji: '⏰',
               },
               {
                 quote:
-                  "Finally, an idea validator that tells you the truth. No more 'that sounds interesting' - just clear verdicts.",
-                author: 'Marcus Rodriguez',
-                role: 'CEO, DataSync',
-                rating: 5,
+                  "Get the truth about your idea. No more just 'that sounds good' - clear, actionable verdicts.",
+                potential: 'Your Name Here',
+                result: 'Using ARENA',
+                emoji: '💡',
               },
               {
                 quote:
-                  'The 7-day test plan was worth the price alone. Gave me exactly what to validate next.',
-                author: 'Emma Thompson',
-                role: 'Founder, HealthTech Solutions',
-                rating: 5,
+                  'A structured validation plan in minutes. Know exactly what to test and why it matters.',
+                potential: 'Early Adopter',
+                result: 'First 100 users',
+                emoji: '🎯',
               },
-            ].map((testimonial, index) => (
-              <Card key={index} className="border-0 shadow-lg">
+            ].map((story, index) => (
+              <Card
+                key={index}
+                className="border-0 shadow-lg hover:shadow-xl transition-all hover:scale-105"
+              >
                 <CardContent className="pt-6">
-                  <div className="flex mb-4">
-                    {[...Array(testimonial.rating)].map((_, i) => (
-                      <span key={i} className="text-yellow-400">
-                        ⭐
-                      </span>
-                    ))}
+                  <div className="flex mb-4 justify-center">
+                    <span className="text-4xl">{story.emoji}</span>
                   </div>
-                  <blockquote className="text-gray-600 mb-4">"{testimonial.quote}"</blockquote>
-                  <div>
-                    <div className="font-semibold text-gray-900">{testimonial.author}</div>
-                    <div className="text-sm text-gray-500">{testimonial.role}</div>
+                  <blockquote className="text-gray-600 dark:text-gray-300 mb-4 italic">
+                    "{story.quote}"
+                  </blockquote>
+                  <div className="text-center">
+                    <div className="font-semibold text-gray-900 dark:text-white">
+                      {story.potential}
+                    </div>
+                    <div className="text-sm text-purple-600 dark:text-purple-400 font-medium">
+                      {story.result}
+                    </div>
                   </div>
+                  <Button size="sm" variant="secondary" className="w-full mt-4">
+                    Could This Be You? →
+                  </Button>
                 </CardContent>
               </Card>
             ))}
+          </div>
+
+          <div className="text-center mt-12">
+            <p className="text-gray-600 dark:text-gray-400 mb-4">
+              🚀 Be one of the first 100 and get lifetime Pro discount
+            </p>
+            <a href="#validate-now">
+              <Button
+                size="lg"
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+              >
+                Start Your Story Today
+              </Button>
+            </a>
           </div>
         </Container>
       </Section>

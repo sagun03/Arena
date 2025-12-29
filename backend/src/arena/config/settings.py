@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     # LLM model
     llm_model: str = "gemini-2.5-flash"
 
-    # Evidence storage toggle
-    store_evidence: bool = True
+    # Phase 2: Historical Intelligence (semantic search across past verdicts)
+    enable_historical_context: bool = False
 
     # Application
     environment: str = "development"

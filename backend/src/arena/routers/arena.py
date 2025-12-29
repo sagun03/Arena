@@ -13,12 +13,43 @@ from arena.agents.market_agent import MarketAgent
 from arena.agents.skeptic_agent import SkepticAgent
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prd_extractor import extract_idea_from_prd
+from arena.models.decision_evidence import DecisionEvidence
 from arena.models.verdict import Verdict
 from arena.state_manager import get_debate_state, save_debate_state
+from arena.vectorstore.embeddings import embed_texts
+from arena.vectorstore.historical_store import get_historical_store
 from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+
+
+def detect_idea_domain(extracted_structure: Dict[str, Any]) -> str:
+    """
+    Detect idea domain from extracted structure key facts.
+
+    Returns one of: SaaS, Marketplace, FinTech, B2B, B2C, or 'general' as fallback.
+
+    Args:
+        extracted_structure: Extracted structure from PRD with key_facts
+
+    Returns:
+        Domain string (SaaS, Marketplace, FinTech, B2B, B2C, or 'general')
+    """
+    idea_domain = "general"
+    if extracted_structure.get("key_facts"):
+        key_facts_str = json.dumps(extracted_structure.get("key_facts", {})).lower()
+        if "saas" in key_facts_str or "software" in key_facts_str:
+            idea_domain = "SaaS"
+        elif "marketplace" in key_facts_str or "platform" in key_facts_str:
+            idea_domain = "Marketplace"
+        elif "fintech" in key_facts_str or "finance" in key_facts_str:
+            idea_domain = "FinTech"
+        elif "b2b" in key_facts_str:
+            idea_domain = "B2B"
+        elif "b2c" in key_facts_str:
+            idea_domain = "B2C"
+    return idea_domain
 
 
 class IdeaValidationRequest(BaseModel):
@@ -199,12 +230,14 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
                     [f"• {q[:100]}..." if len(q) > 100 else f"• {q}" for q in questions[:3]]
                 )
                 message = (
-                    f"**Judge's Analysis:**\n\nKey Questions:\n{question_summary}\n\nKey Gaps Identified:\n"
+                    f"**Judge's Analysis:**\n\nKey Questions:\n{question_summary}\n\n"
+                    f"Key Gaps Identified:\n"
                     + "\n".join([f"• {g}" for g in gaps[:3]])
                     + f"\n\nQuality Score: {quality}/1.0"
                 )
-            except:
-                message = f"Judge analyzed the idea (Quality: {entry.get('summary', {}).get('quality_score', 'N/A')}/1.0)"
+            except Exception:
+                quality_score = entry.get("summary", {}).get("quality_score", "N/A")
+                message = f"Judge analyzed the idea (Quality: {quality_score}/1.0)"
 
         elif entry_type == "round2:start":
             message = "Worker agents (Skeptic, Customer, Market) are analyzing..."
@@ -221,8 +254,8 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
                     json_str = json_str[:-3]
                 parsed = json.loads(json_str.strip())
                 attacks = parsed.get("fatal_flaws", [])[:2]
-                message = f"**Skeptic's Attack:**\n\n" + "\n".join([f"• {a}" for a in attacks])
-            except:
+                message = "**Skeptic's Attack:**\n\n" + "\n".join([f"• {a}" for a in attacks])
+            except Exception:
                 message = "Skeptic provided attack analysis"
 
         elif entry_type == "customer":
@@ -245,8 +278,8 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
                     json_str = json_str[:-3]
                 parsed = json.loads(json_str.strip())
                 strengths = parsed.get("constrained_defense_points", [])[:2]
-                message = f"**Builder's Defense:**\n\n" + "\n".join([f"• {s}" for s in strengths])
-            except:
+                message = "**Builder's Defense:**\n\n" + "\n".join([f"• {s}" for s in strengths])
+            except Exception:
                 message = "Builder provided defense"
 
         elif entry_type == "quality_gate":
@@ -351,12 +384,8 @@ async def delete_debate(debate_id: str = Path(..., description="Unique debate id
     Returns:
         Success message
     """
-    deleted = await delete_debate_state(debate_id)
-
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
-
-    return {"debate_id": debate_id, "message": "Debate deleted successfully", "status": "deleted"}
+    # Note: delete_debate_state not yet implemented
+    raise HTTPException(status_code=501, detail="Delete debate state not yet implemented")
 
 
 async def execute_debate(debate_id: str, prd_text: str) -> None:
@@ -441,6 +470,69 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             }
         )
         extracted_structure = idea.extracted_structure.model_dump()
+
+        # Phase 2: Retrieve similar past ideas for historical context
+        historical_context_text = ""
+        try:
+            historical_store = get_historical_store()
+            if historical_store.enabled:
+                # Generate idea embedding for semantic search
+                idea_summary = prd_text[:500]  # First 500 chars as summary
+                embeddings = await embed_texts([idea_summary])
+                idea_embedding = embeddings[0]
+
+                # Detect domain from extracted structure
+                idea_domain = detect_idea_domain(extracted_structure)
+
+                # Retrieve semantically similar past verdicts
+                similar_ideas = await historical_store.retrieve_similar_ideas(
+                    query_embedding=idea_embedding,
+                    n_results=5,
+                    domain_filter=idea_domain if idea_domain != "general" else None,
+                )
+
+                if similar_ideas:
+                    # Format historical context for agents
+                    historical_context_text = (
+                        "\n## Historical Pattern Analysis (cross-domain insights):\n"
+                    )
+                    for i, past_idea in enumerate(similar_ideas, 1):
+                        # Show domain diversity
+                        domain_label = f"{past_idea.get('domain', 'General')} domain"
+                        confidence_pct = f"{past_idea.get('confidence', 0.5):.1%}"
+                        historical_context_text += (
+                            f"\n**Pattern {i}** ({domain_label}, "
+                            f"Confidence: {confidence_pct}):\n"
+                        )
+                        verdict_str = past_idea.get("verdict_decision")
+                        score = past_idea.get("overall_score", "N/A")
+                        historical_context_text += (
+                            f"- Verdict: **{verdict_str}** (Score: {score}/100)\n"
+                        )
+                        kill_shot_titles = [
+                            ks.get("title", "Unknown") for ks in past_idea.get("kill_shots", [])
+                        ]
+                        flaws = ", ".join(kill_shot_titles)
+                        historical_context_text += f"- Critical Flaws: {flaws}\n"
+                        if past_idea.get("recommendations"):
+                            recs = ", ".join(past_idea.get("recommendations", [])[:2])
+                            historical_context_text += f"- Proven Fixes: {recs}\n"
+
+                    await append_event(
+                        {
+                            "agent": "System",
+                            "round": 2,
+                            "type": "historical_context",
+                            "text": (
+                                f"Retrieved {len(similar_ideas)} cross-domain patterns. "
+                                f"Agents will challenge against these."
+                            ),
+                            "timestamp": datetime.utcnow().isoformat(),
+                        }
+                    )
+        except Exception:
+            # Silently skip historical retrieval if it fails
+            pass
 
         # Skeptic attack
         await append_event(
@@ -638,6 +730,52 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             }
         )
         await save_debate_state(debate_id, final_state)
+
+        # Phase 2: Persist decision evidence for historical analysis
+        try:
+            historical_store = get_historical_store()
+            if historical_store.enabled:
+                verdict_obj = verdict if isinstance(verdict, Verdict) else Verdict(**verdict)
+
+                # Generate idea embedding for persistence
+                idea_summary = prd_text[:500]
+                embeddings = await embed_texts([idea_summary])
+                idea_embedding = embeddings[0]
+
+                # Extract kill-shot titles and severity
+                kill_shots_for_storage = [
+                    {
+                        "title": ks.title,
+                        "severity": ks.severity,
+                        "description": ks.description,
+                    }
+                    for ks in verdict_obj.kill_shots[:3]
+                ]
+
+                # Detect domain from extracted structure
+                idea_domain = detect_idea_domain(extracted_structure)
+
+                # Create decision evidence
+                decision_evidence = DecisionEvidence(
+                    debate_id=debate_id,
+                    idea_summary=idea_summary,
+                    idea_embedding=idea_embedding,
+                    verdict_decision=verdict_obj.decision,
+                    overall_score=verdict_obj.scorecard.overall_score,
+                    kill_shots=kill_shots_for_storage,
+                    assumptions=verdict_obj.assumptions,
+                    recommendations=verdict_obj.recommendations,
+                    domain=idea_domain,
+                    confidence=verdict_obj.confidence,
+                )
+
+                # Persist to historical store
+                stored_id = await historical_store.persist_decision_evidence(decision_evidence)
+                if stored_id:
+                    print(f"Decision evidence persisted for debate {debate_id}")
+        except Exception as e:
+            # Silently skip persistence if it fails
+            print(f"Warning: Failed to persist decision evidence: {e}")
 
     except Exception as e:
         # Capture failure in state

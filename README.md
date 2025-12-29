@@ -16,7 +16,9 @@ Submit your business idea → ARENA runs it through a 5-round adversarial debate
 - **Multi-Agent Architecture**: Supervisor (Judge) + Workers (Skeptic, Customer, Market, Builder)
 - **Evidence Tagging**: Every claim tagged as Verified, Assumption, or NeedsValidation
 - **Clear Outputs**: Scorecard (0-100), Top 5 Kill-Shots, Assumptions List, 7-Day Test Plan
-- **Lightweight Core**: In-memory state management, zero external caching dependencies
+- **Actionable Recommendations**: Structural pivots and validation strategies for each verdict
+- **Lightweight Core**: In-memory state management, zero external caching dependencies (MVP)
+- **Phase 2: Historical Intelligence**: Cross-domain pattern matching via semantic search + intelligent re-ranking (disabled by default)
 - **Beautiful UI**: Next.js 16 with Assistant UI
 
 ## 🏗️ Architecture
@@ -153,7 +155,65 @@ Environment variables:
 3. **Controlled Orchestration** - Structured debate protocol
 4. **Decision-Oriented** - Goal is verdict, not inspiration
 
-## 📄 License
+## � Phase 2: Historical Intelligence (Semantic Search)
+## 🔮 Phase 2: Historical Intelligence (Cross-Domain Pattern Matching)
+
+**Phase 2 enabled with intelligent re-ranking.**
+
+ARENA naturally implies memory. With Phase 2, ARENA builds institutional knowledge from past debates:
+
+### How It Works
+
+**Cross-Domain Pattern Matching with Intelligent Re-Ranking**
+
+1. **Selective Persistence**: After each verdict, ARENA stores:
+   - Idea embedding via semantic search
+   - Verdict decision (Proceed/Pivot/Kill/NeedsMoreData)
+   - Top 3 kill-shots with severity
+   - Key assumptions and actionable recommendations
+   - Idea domain (SaaS, Marketplace, FinTech, B2B, B2C)
+   - Judge's confidence score
+
+2. **Broad Retrieval + Composite Scoring** (pre-Round-2):
+   - Fetches 3x results across ALL domains (no hard domain filter)
+   - Scores by: semantic similarity + domain match bonus + confidence
+   - Example: SaaS idea also matches Marketplace patterns with high semantic score
+
+3. **Diversity Re-ranking** (intelligent selection):
+   - Ensures agents see mix of verdict types (not 5 "Kill" verdicts)
+   - Cross-domain insights (SaaS + Marketplace + FinTech simultaneously)
+   - Top scorers prioritized + diversity maximized
+   - Result: 3-5 diverse, high-quality pattern examples
+
+4. **Agents Challenge Against Patterns**:
+   - *"Marketplace ideas failed on CAC—your SaaS has identical vulnerability"*
+   - *"Unit economics validation succeeded in 4/5 FinTech pivots—apply here?"*
+   - *"B2B competitor solved this with partnerships—differentiation opportunity"*
+
+### Configuration
+
+Enable historical intelligence in `.env`:
+```bash
+ENABLE_HISTORICAL_CONTEXT=true
+```
+
+Disable the feature (MVP mode):
+```bash
+ENABLE_HISTORICAL_CONTEXT=false
+```
+
+No additional setup—ChromaDB handles persistence automatically.
+
+### Why This Matters
+
+Without Phase 2: *"Cool multi-agent debate demo"*
+
+With Phase 2 + *"ML-powered institutional memory system that learns failure patterns across industries"*
+
+This transforms ARENA from a one-off validation tool into a platform that gets smarter with every debate.
+
+
+## �📄 License
 
 Licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 

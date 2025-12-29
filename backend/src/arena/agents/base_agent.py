@@ -3,9 +3,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from arena.config.settings import settings
 from arena.models.evidence import EvidenceTag, EvidenceType
-from arena.vectorstore.evidence_store import search_similar_evidence, store_evidence
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
@@ -85,7 +83,8 @@ class BaseAgent:
         # Debug log for empty or very short responses
         if not content or len(content) < 10:
             print(
-                f"[{self.name}] WARNING: Empty/short response (len={len(content)}): {repr(content[:100])}",
+                f"[{self.name}] WARNING: Empty/short response (len={len(content)}): "
+                f"{repr(content[:100])}",
                 file=sys.stderr,
             )
 
@@ -107,9 +106,9 @@ class BaseAgent:
 
         try:
             return json.loads(content)
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             print(
-                f"[{self.name}] WARNING: JSON parse failed, wrapping plain text response",
+                f"[{self.name}] WARNING: JSON parse failed, wrapping plain " f"text response",
                 file=sys.stderr,
             )
             # Fallback: if it's not JSON, wrap the text response in a response field
@@ -150,56 +149,6 @@ class BaseAgent:
 
         return evidence_tags
 
-    async def store_evidence_tags(
-        self, evidence_tags: List[EvidenceTag], round_number: int
-    ) -> List[str]:
-        """
-        Store evidence tags in ChromaDB.
-
-        Args:
-            evidence_tags: List of evidence tags to store
-            round_number: Current debate round number
-
-        Returns:
-            List of document IDs
-        """
-        # If disabled via settings, skip storing to avoid embedding calls/quota
-        if not settings.store_evidence:
-            return []
-
-        doc_ids = []
-        for tag in evidence_tags:
-            metadata = {
-                "agent": tag.agent,
-                "round": tag.round,
-                "evidence_type": tag.type.value,
-                "debate_id": self.debate_id,
-            }
-            try:
-                doc_id = await store_evidence(tag.text, metadata)
-                doc_ids.append(doc_id)
-            except Exception:
-                # Silently skip storage failures to keep debate running
-                continue
-        return doc_ids
-
-    async def search_evidence(
-        self, query: str, n: int = 5, debate_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for similar evidence in ChromaDB.
-
-        Args:
-            query: Search query
-            n: Number of results
-            debate_id: Optional debate ID to filter (defaults to self.debate_id)
-
-        Returns:
-            List of similar evidence
-        """
-        search_debate_id = debate_id or self.debate_id
-        return await search_similar_evidence(query, n=n, debate_id=search_debate_id)
-
     def format_prompt(self, template: str, **kwargs: Any) -> str:
         """
         Format prompt template with provided arguments.
@@ -213,16 +162,13 @@ class BaseAgent:
         """
         return template.format(**kwargs)
 
-    async def process_response(
-        self, response: str, round_number: int, should_store_evidence: bool = True
-    ) -> Dict[str, Any]:
+    async def process_response(self, response: str, round_number: int) -> Dict[str, Any]:
         """
-        Process agent response: parse JSON, extract evidence tags, store evidence.
+        Process agent response: parse JSON and extract evidence tags.
 
         Args:
             response: Raw LLM response
             round_number: Current debate round number
-            should_store_evidence: Whether to store evidence tags in ChromaDB
 
         Returns:
             Dictionary with parsed response and evidence tags
@@ -232,10 +178,6 @@ class BaseAgent:
 
         # Extract evidence tags
         evidence_tags = self.extract_evidence_tags(parsed_response, round_number)
-
-        # Store evidence if requested
-        if should_store_evidence and evidence_tags:
-            await self.store_evidence_tags(evidence_tags, round_number)
 
         return {
             "response": parsed_response,
