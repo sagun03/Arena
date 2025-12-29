@@ -13,26 +13,26 @@ Submit your business idea → ARENA runs it through a 5-round adversarial debate
 ## ✨ Key Features
 
 - **5-Round Debate Protocol**: Clarification → Attacks → Defense → Cross-Examination → Verdict
-- **Multi-Agent Architecture**: Orchestrator (LangGraph) + Supervisor (Judge) + Workers (Skeptic, Customer, Market, Builder)
+- **Multi-Agent Architecture**: Supervisor (Judge) + Workers (Skeptic, Customer, Market, Builder)
 - **Evidence Tagging**: Every claim tagged as Verified, Assumption, or NeedsValidation
 - **Clear Outputs**: Scorecard (0-100), Top 5 Kill-Shots, Assumptions List, 7-Day Test Plan
-- **Real-time Updates**: Live debate progress via Redis pub/sub
+- **Lightweight Core**: In-memory state management, zero external caching dependencies
 - **Beautiful UI**: Next.js 16 with Assistant UI
 
 ## 🏗️ Architecture
 
 ```
-User → Frontend (Next.js) → Backend (FastAPI) → LangGraph → Agents (Gemini)
+User → Frontend (Next.js) → Backend (FastAPI) → Agents (Gemini)
                                               ↓
-                                         Redis (State)
+                                         In-Memory State
                                          ChromaDB (Evidence)
-                                         LangSmith (Tracing)
 ```
 
 ## 🛠️ Tech Stack
 
-**Backend:** Python, FastAPI, LangChain, LangGraph, Google Gemini, Redis, ChromaDB, LangSmith
+**Backend:** Python, FastAPI, LangChain, Google Gemini, ChromaDB
 **Frontend:** Next.js 16, TypeScript, Assistant UI, Tailwind CSS
+**Storage:** In-memory state management (MVP), upgrading to database for production
 
 ## 🚀 Quick Start
 
@@ -53,7 +53,6 @@ See [COMMANDS.md](./COMMANDS.md) for full command reference.
 ### Prerequisites
 - Python 3.11+, Node.js 18+
 - `uv` package manager
-- Redis (local or Docker)
 - Google Gemini API key
 
 ### Local Development
@@ -66,31 +65,27 @@ cd Arena
 # Backend
 cd backend
 uv sync
-cp .env.example .env  # Add your API keys
+cp .env.example .env  # Add your Gemini API key
 uv run uvicorn src.arena.main:app --reload
 
 # Frontend (new terminal)
 cd frontend
 npm install
 npm run dev
-
-# Or use Docker Compose
-docker-compose up
 ```
 
 ### Deploy to Cloud Run
 
 ```bash
-# Setup Redis (Memorystore)
-gcloud redis instances create arena-redis --region=us-central1
-
 # Deploy Backend
 cd backend
-gcloud run deploy arena-backend --source .
+gcloud run deploy arena-backend --source . --allow-unauthenticated
 
 # Deploy Frontend
 cd frontend
-gcloud run deploy arena-frontend --source .
+gcloud run deploy arena-frontend --source . --allow-unauthenticated
+
+# Note: For production, migrate from in-memory to persistent database
 ```
 
 ## 📖 Usage
@@ -132,15 +127,37 @@ POST /arena/validate
 ## 🔧 Configuration
 
 Environment variables:
-- `GOOGLE_API_KEY` - Gemini API key
-- `REDIS_HOST` - Redis connection (localhost for dev, Memorystore IP for prod)
-- `LANGSMITH_API_KEY` - Optional, for observability
+- `GOOGLE_API_KEY` - Gemini API key (required)
+- `CHROMADB_PATH` - Path for ChromaDB vector store (default: ./chroma_db)
+- `ENVIRONMENT` - Set to 'development' or 'production' (default: development)
+- `LOG_LEVEL` - Logging level (default: INFO)
 
-## 📊 Observability
+## 📊 Monitoring
 
-- **LangSmith**: Automatic tracing of all agent calls
-- **Cloud Monitoring**: Performance and error tracking
-- **Redis**: Real-time state monitoring
+- **Structured Logging**: All agent calls and debate flow logged
+- **State Management**: In-memory tracking during MVP phase
+- **ChromaDB**: Evidence storage and vector similarity search
+
+## 🔄 Recent Changes (Latest Commit)
+
+**December 2025 - Simplification & Cleanup**
+
+✅ **Removed:**
+- Redis dependency and all Redis-related code
+- LangSmith observability framework
+- LangGraph orchestration (simplified to direct agent execution)
+
+✅ **Added:**
+- In-memory state manager for MVP development
+- Comprehensive test suite (7 test files)
+- Lightweight, zero-dependency core
+
+✅ **Result:**
+- Faster development cycle
+- Reduced external dependencies
+- Easy migration path to persistent database when needed
+
+See commit `0f7ed7b` for details.
 
 ## 🤝 Contributing
 
