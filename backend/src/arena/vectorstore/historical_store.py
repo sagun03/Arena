@@ -195,7 +195,8 @@ class HistoricalStore:
         Strategy:
         - Sort by composite_score
         - Select top scorer
-        - For each subsequent slot: pick highest-scoring result that differs in verdict_decision or domain
+        - For each slot: pick highest-scoring result that differs in
+          verdict_decision or domain
         - Fallback to score order if diversity exhausted
 
         Args:
@@ -212,7 +213,7 @@ class HistoricalStore:
         # Sort by composite score (descending)
         candidates_sorted = sorted(candidates, key=lambda x: x["composite_score"], reverse=True)
 
-        final_results = []
+        final_results: list[dict[str, Any]] = []
         used_verdicts = set()
         used_domains = set()
 

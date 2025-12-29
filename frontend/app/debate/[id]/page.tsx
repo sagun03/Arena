@@ -121,7 +121,7 @@ export default function DebatePage() {
               </Button>
               <Button
                 onClick={() => setPolling(p => !p)}
-                variant={polling ? 'default' : 'secondary'}
+                variant={polling ? 'primary' : 'secondary'}
                 size="sm"
                 className="shadow-md hover:shadow-xl transition-all"
               >
@@ -320,7 +320,7 @@ export default function DebatePage() {
                             <div className="flex items-center gap-2">
                               <span className="text-lg">{agentBadge}</span>
                               <span className="font-bold text-sm">{agent}</span>
-                              {round && (
+                              {round && agent !== 'System' && (
                                 <Badge
                                   variant="secondary"
                                   className="text-xs bg-white/50 dark:bg-slate-800/50"
@@ -328,7 +328,7 @@ export default function DebatePage() {
                                   Round {round}
                                 </Badge>
                               )}
-                              {type?.includes(':start') && (
+                              {type?.includes(':start') && agent !== 'System' && (
                                 <span className="inline-block animate-spin ml-2">⟳</span>
                               )}
                             </div>
@@ -364,6 +364,32 @@ export default function DebatePage() {
                               return <div key={lineIdx} className="h-1" />
                             })}
                           </div>
+
+                          {/* Metadata badges */}
+                          {item?.metadata && Object.keys(item.metadata).length > 0 && (
+                            <div className="mt-4 pt-3 border-t border-current opacity-20 flex flex-wrap gap-2">
+                              {Object.entries(item.metadata).map(([key, value]: [string, any]) => {
+                                // Skip displaying the agent key as we already show it
+                                if (key === 'agent') return null
+
+                                // Format key for display (convert snake_case to Title Case)
+                                const displayKey = key
+                                  .split('_')
+                                  .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                                  .join(' ')
+
+                                return (
+                                  <Badge
+                                    key={key}
+                                    variant="outline"
+                                    className="text-xs whitespace-nowrap bg-white/30 dark:bg-slate-800/30"
+                                  >
+                                    {displayKey}: {String(value)}
+                                  </Badge>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )
                     })

@@ -52,6 +52,153 @@ def detect_idea_domain(extracted_structure: Dict[str, Any]) -> str:
     return idea_domain
 
 
+def format_agent_response(
+    agent_result: Dict[str, Any], agent_name: str
+) -> tuple[str, Dict[str, Any]]:
+    """
+    Extract and format structured data from agent response.
+
+    Args:
+        agent_result: Result dict from agent with 'response', 'raw_response', 'evidence_tags'
+        agent_name: Name of the agent (Customer, Market, Builder, Skeptic)
+
+    Returns:
+        Tuple of (formatted_text, metadata_dict)
+    """
+    response_obj = agent_result.get("response", {})
+    metadata = {
+        "agent": agent_name,
+        "evidence_count": len(agent_result.get("evidence_tags", [])),
+    }
+
+    # Extract key findings and add metadata based on agent type
+    key_points = []
+
+    if agent_name == "Customer":
+        # Extract customer-specific insights
+        if isinstance(response_obj, dict):
+            problem_validation = response_obj.get("problem_validation", {})
+            if isinstance(problem_validation, dict):
+                pain_level = problem_validation.get("pain_level", "N/A")
+                problem_exists = problem_validation.get("problem_exists", "Unknown")
+                key_points.append(f"Problem exists: {problem_exists} (Pain level: {pain_level})")
+                metadata["problem_validated"] = problem_exists
+
+            willingness = response_obj.get("willingness_to_pay", {})
+            if isinstance(willingness, dict):
+                will_pay = willingness.get("will_pay", "Unknown")
+                price = willingness.get("estimated_price", "N/A")
+                key_points.append(f"Willingness to pay: {will_pay} (Est. ${price})")
+                metadata["willingness"] = will_pay
+
+            critical_concerns = response_obj.get("critical_concerns", [])
+            if critical_concerns:
+                concern_list = (
+                    ", ".join(critical_concerns[:2])
+                    if isinstance(critical_concerns, list)
+                    else str(critical_concerns)[:100]
+                )
+                key_points.append(f"Key concerns: {concern_list}")
+                metadata["concerns_count"] = (
+                    len(critical_concerns) if isinstance(critical_concerns, list) else 1
+                )
+
+    elif agent_name == "Market":
+        # Extract market-specific insights
+        if isinstance(response_obj, dict):
+            market_analysis = response_obj.get("market_analysis", {})
+            if isinstance(market_analysis, dict):
+                market_size = market_analysis.get("market_size_realistic", "Unknown")
+                growth = market_analysis.get("market_growth", "N/A")
+                key_points.append(f"Market size: {market_size}, Growth: {growth}")
+                metadata["market_realistic"] = market_size
+
+            saturation = response_obj.get("market_saturation", {})
+            if isinstance(saturation, dict):
+                is_saturated = saturation.get("is_saturated", "Unknown")
+                level = saturation.get("saturation_level", "N/A")
+                key_points.append(f"Market saturation: {is_saturated} ({level})")
+                metadata["saturation"] = is_saturated
+
+            competitors = response_obj.get("competition", [])
+            if competitors and isinstance(competitors, list):
+                comp_count = len(competitors)
+                key_points.append(f"Major competitors identified: {comp_count}")
+                metadata["competitor_count"] = comp_count
+
+            risks = response_obj.get("market_risks", [])
+            if risks:
+                risk_summary = ", ".join(risks[:2]) if isinstance(risks, list) else str(risks)[:100]
+                key_points.append(f"Market risks: {risk_summary}")
+                metadata["risks_count"] = len(risks) if isinstance(risks, list) else 1
+
+    elif agent_name == "Builder":
+        # Extract builder-specific insights
+        if isinstance(response_obj, dict):
+            technical = response_obj.get("technical_feasibility", {})
+            if isinstance(technical, dict):
+                feasible = technical.get("is_feasible", "Unknown")
+                key_points.append(f"Technical feasibility: {feasible}")
+                metadata["technically_feasible"] = feasible
+
+            business = response_obj.get("business_feasibility", {})
+            if isinstance(business, dict):
+                viable = business.get("is_viable", "Unknown")
+                key_points.append(f"Business viability: {viable}")
+                metadata["business_viable"] = viable
+
+            challenges = response_obj.get("technical_challenges", [])
+            if challenges:
+                challenge_summary = (
+                    ", ".join(challenges[:2])
+                    if isinstance(challenges, list)
+                    else str(challenges)[:100]
+                )
+                key_points.append(f"Challenges: {challenge_summary}")
+                metadata["challenges_count"] = (
+                    len(challenges) if isinstance(challenges, list) else 1
+                )
+
+            risks = response_obj.get("business_risks", [])
+            if risks:
+                risk_summary = ", ".join(risks[:2]) if isinstance(risks, list) else str(risks)[:100]
+                key_points.append(f"Business risks: {risk_summary}")
+                metadata["business_risks_count"] = len(risks) if isinstance(risks, list) else 1
+
+    elif agent_name == "Skeptic":
+        # Extract skeptic-specific insights
+        if isinstance(response_obj, dict):
+            kill_shots = response_obj.get("kill_shots", [])
+            if kill_shots:
+                shot_count = len(kill_shots) if isinstance(kill_shots, list) else 1
+                top_shot = (
+                    kill_shots[0].get("title", "Unknown")
+                    if isinstance(kill_shots, list) and kill_shots
+                    else "Unknown"
+                )
+                key_points.append(f"Fatal flaws identified: {shot_count} (Primary: {top_shot})")
+                metadata["kill_shots_count"] = shot_count
+
+            risks = response_obj.get("business_risks", [])
+            if risks:
+                risk_summary = ", ".join(risks[:2]) if isinstance(risks, list) else str(risks)[:100]
+                key_points.append(f"Key risks: {risk_summary}")
+                metadata["risks_count"] = len(risks) if isinstance(risks, list) else 1
+
+    # Format final text: key points first, then raw response
+    if key_points:
+        formatted_text = (
+            "**Key Findings:**\n"
+            + "\n".join(f"• {point}" for point in key_points)
+            + "\n\n**Detailed Analysis:**\n"
+            + agent_result.get("raw_response", "")
+        )
+    else:
+        formatted_text = agent_result.get("raw_response", "")
+
+    return formatted_text, metadata
+
+
 class IdeaValidationRequest(BaseModel):
     """Request model for idea validation"""
 
@@ -73,6 +220,9 @@ class TranscriptEntry(BaseModel):
     timestamp: str = Field(..., description="ISO timestamp")
     round: int | None = Field(None, description="Debate round number")
     type: str | None = Field(None, description="Event type (clarification, attack, defense, etc.)")
+    metadata: Dict[str, Any] | None = Field(
+        None, description="Additional metadata (confidence scores, analysis metrics, etc.)"
+    )
 
 
 class DebateResponse(BaseModel):
@@ -540,7 +690,10 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
                 "agent": "Skeptic",
                 "round": 2,
                 "type": "attack:start",
-                "text": "🔍 Analyzing fatal flaws, market risks, and business model vulnerabilities...",
+                "text": (
+                    "🔍 Analyzing fatal flaws, market risks, and "
+                    "business model vulnerabilities..."
+                ),
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -549,12 +702,14 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             extracted_structure=extracted_structure,
             previous_context=clarification,
         )
+        skeptic_text, skeptic_metadata = format_agent_response(skeptic_result, "Skeptic")
         await append_event(
             {
                 "agent": "Skeptic",
                 "round": 2,
                 "type": "attack",
-                "text": skeptic_result.get("raw_response", ""),
+                "text": skeptic_text,
+                "metadata": skeptic_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -574,12 +729,14 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             extracted_structure=extracted_structure,
             previous_context=clarification,
         )
+        customer_text, customer_metadata = format_agent_response(customer_result, "Customer")
         await append_event(
             {
                 "agent": "Customer",
                 "round": 2,
                 "type": "customer",
-                "text": customer_result.get("raw_response", ""),
+                "text": customer_text,
+                "metadata": customer_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -599,12 +756,14 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             extracted_structure=extracted_structure,
             previous_context=clarification,
         )
+        market_text, market_metadata = format_agent_response(market_result, "Market")
         await append_event(
             {
                 "agent": "Market",
                 "round": 2,
                 "type": "market",
-                "text": market_result.get("raw_response", ""),
+                "text": market_text,
+                "metadata": market_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
@@ -656,12 +815,14 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             attacks=attacks,
             evidence_tags=round2_evidence,
         )
+        defense_text, defense_metadata = format_agent_response(defense_result, "Builder")
         await append_event(
             {
                 "agent": "Builder",
                 "round": 3,
                 "type": "defense",
-                "text": defense_result.get("raw_response", ""),
+                "text": defense_text,
+                "metadata": defense_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
