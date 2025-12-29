@@ -10,15 +10,17 @@ EXTRACTION_PROMPT = (
     """Preserve ALL information - nothing should be lost.
 
 Instructions:
-1. Identify all sections/topics in the PRD
-2. Extract each section with its full content
-3. Categorize sections into: core, market, technical, business, execution, risks, or other
-4. Extract key facts as key-value pairs (e.g., "Target Customer": "...", "Pricing": "...")
-5. Extract lists (competitors, features, risks, technologies, etc.)
-6. Preserve ALL information - if something doesn't fit categories, use "other" category
+1. Identify the product/idea title or name (usually the main heading or first section title)
+2. Identify all sections/topics in the PRD
+3. Extract each section with its full content
+4. Categorize sections into: core, market, technical, business, execution, risks, or other
+5. Extract key facts as key-value pairs (e.g., "Target Customer": "...", "Pricing": "...")
+6. Extract lists (competitors, features, risks, technologies, etc.)
+7. Preserve ALL information - if something doesn't fit categories, use "other" category
 
 Return a JSON object with this structure:
 {{
+    "title": "Product or Idea Name/Title",
     "sections": [
         {{
             "title": "Section title",
@@ -84,6 +86,7 @@ async def extract_idea_from_prd(prd_text: str) -> Idea:
     except json.JSONDecodeError as e:
         # Fallback: create minimal structure if JSON parsing fails
         extracted_data = {
+            "title": "Untitled Idea",
             "sections": [
                 {"title": "Full PRD", "content": prd_text, "category": "other", "key_points": []}
             ],
@@ -109,6 +112,9 @@ async def extract_idea_from_prd(prd_text: str) -> Idea:
         lists=extracted_data.get("lists", {}),
         metadata=extracted_data.get("metadata", {}),
     )
+
+    # Store title in metadata for easy access
+    extracted_structure.metadata["title"] = extracted_data.get("title", "Untitled Idea")
 
     # Create Idea object
     return Idea(original_prd_text=prd_text, extracted_structure=extracted_structure)

@@ -5,9 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
-    title="ARENA API",
+    title="IdeaAudit API",
     description="""
-    **ARENA (Agentic Idea Validation Platform)** - An AI-powered platform for validating
+    **IdeaAudit (Agentic Idea Validation Platform)** - An AI-powered platform for validating
     business ideas through structured debates between AI agents.
 
     ## Features
@@ -35,7 +35,7 @@ app = FastAPI(
         {
             "name": "arena",
             "description": """
-            Core ARENA endpoints for idea validation and debate management.
+            Core IdeaAudit endpoints for idea validation and debate management.
 
             * **Validate Ideas**: Submit PRDs and business ideas for validation
             * **Debate Management**: Track and retrieve debate progress
@@ -62,4 +62,4 @@ app.include_router(arena.router, prefix="/arena", tags=["arena"])
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {"message": "ARENA API", "version": "0.1.0"}
+    return {"message": "IdeaAudit API", "version": "0.1.0"}

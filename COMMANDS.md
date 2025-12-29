@@ -1,4 +1,4 @@
-# ARENA Project Commands
+# IdeaAudit Project Commands
 
 Quick reference for common commands.
 

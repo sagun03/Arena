@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/badge'
 import { Section, Container } from '@/components/section'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { Logo } from '@/components/logo'
 import {
   CheckCircle,
   Target01,
@@ -23,6 +24,7 @@ export default function Home() {
   const [prdText, setPrdText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successDebateId, setSuccessDebateId] = useState<string | null>(null)
+  const [successIdeaTitle, setSuccessIdeaTitle] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -39,6 +41,7 @@ export default function Home() {
     setIsSubmitting(true)
     setErrorMessage(null)
     setSuccessDebateId(null)
+    setSuccessIdeaTitle(null)
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
       const res = await fetch(`${apiUrl}/arena/validate`, {
@@ -52,6 +55,7 @@ export default function Home() {
       }
       const data = await res.json()
       setSuccessDebateId(data.debate_id ?? null)
+      setSuccessIdeaTitle(data.idea_title ?? null)
       setToast({ type: 'success', message: 'Validation started. Redirect buttons enabled.' })
     } catch (err: any) {
       setErrorMessage(err?.message || 'Failed to validate idea')
@@ -71,7 +75,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'arena-verdict-sample.json'
+    a.download = 'ideaaudit-verdict-sample.json'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -95,11 +99,7 @@ export default function Home() {
         <Container className="flex items-center justify-between py-4">
           {/* Brand/Logo */}
           <div className="flex items-center space-x-3">
-            <div className="relative w-8 h-8 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center shadow-sm border border-slate-200 dark:border-slate-700">
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-400/40 to-indigo-400/40 rounded-lg blur-sm"></div>
-              <div className="relative w-5 h-5 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-full"></div>
-            </div>
-            <span className="text-xl font-bold text-slate-900 dark:text-white">ARENA</span>
+            <Logo className="h-12 w-auto" />
           </div>
 
           {/* Navigation Links */}
@@ -187,7 +187,7 @@ export default function Home() {
             </Button>
             <Button
               size="sm"
-              className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white border-0 shadow-sm hover:shadow-md rounded-lg"
+              className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white border-0 shadow-sm hover:shadow-md rounded-lg"
             >
               Sign up
             </Button>
@@ -220,19 +220,22 @@ export default function Home() {
           </Badge>
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-6 leading-tight">
             Stop Wasting Time on{' '}
-            <span className="bg-gradient-to-r from-red-500 via-fuchsia-600 to-purple-600 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
               Bad Ideas
             </span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
-            ARENA is an agentic system that disagree by default and validates ideas through
+            IdeaAudit is an agentic system that disagrees by default and validates ideas through
             structured adversarial reasoning. Get clear verdicts: Proceed, Pivot, Kill, or Needs
             More Data.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <a href="#validate-now">
-              <Button size="lg" className="text-lg px-8 py-4">
-                Try ARENA Free →
+              <Button
+                size="lg"
+                className="text-lg px-8 py-4 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
+              >
+                Try IdeaAudit Free →
               </Button>
             </a>
             <Button variant="secondary" size="lg" className="text-lg px-8 py-4">
@@ -291,7 +294,7 @@ export default function Home() {
             `}</style>
             <div className="ai-container relative">
               {/* Main container with glow */}
-              <div className="ai-glow bg-gradient-to-r from-blue-500 to-purple-500 rounded-3xl px-12 py-8 shadow-2xl backdrop-blur-sm relative overflow-hidden">
+              <div className="ai-glow bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] rounded-3xl px-12 py-8 shadow-2xl backdrop-blur-sm relative overflow-hidden">
                 {/* Gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent rounded-3xl pointer-events-none"></div>
 
@@ -338,10 +341,11 @@ export default function Home() {
               Features
             </Badge>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Why Founders Choose ARENA
+              Why Founders Choose IdeaAudit
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Built for the harsh reality of entrepreneurship. ARENA doesn't encourage—it validates.
+              Built for the harsh reality of entrepreneurship. IdeaAudit doesn't encourage—it
+              validates.
             </p>
           </div>
 
@@ -439,7 +443,7 @@ export default function Home() {
             </div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white mb-6 leading-tight">
               From Idea to Verdict in{' '}
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
                 5 Rounds
               </span>
             </h2>
@@ -522,14 +526,14 @@ export default function Home() {
       >
         <Container size="lg">
           <div className="text-center mb-16">
-            <div className="inline-flex items-center rounded-full bg-gradient-to-r from-orange-100 to-red-100 dark:from-orange-900/30 dark:to-red-900/30 px-4 py-2 mb-6">
-              <span className="text-sm font-semibold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+            <div className="inline-flex items-center rounded-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] px-4 py-2 mb-6">
+              <span className="text-sm text-white font-semibold bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
                 🎯 Try It Now
               </span>
             </div>
             <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-6 leading-tight">
-              See ARENA in{' '}
-              <span className="bg-gradient-to-r from-orange-500 to-red-500 bg-clip-text text-transparent">
+              See IdeaAudit in{' '}
+              <span className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
                 Action
               </span>
             </h2>
@@ -544,7 +548,7 @@ export default function Home() {
                 🚀 Validate Your Idea
               </CardTitle>
               <CardDescription className="text-lg text-gray-600 dark:text-gray-300">
-                Enter your business idea details below and see how ARENA evaluates it.
+                Enter your business idea details below and see how IdeaAudit evaluates it.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-8 px-8 pb-8">
@@ -553,23 +557,33 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-green-700 dark:text-green-300">
-                        Validation started
+                        Validation started for
                       </p>
-                      <p className="text-sm text-green-700/80 dark:text-green-300/80">
-                        Track your session with this ID:
+                      <p className="text-lg font-bold text-gray-900 dark:text-white">
+                        {successIdeaTitle || 'Untitled Idea'}
                       </p>
                     </div>
                     <Badge variant="success">Debate Started</Badge>
                   </div>
-                  <div className="mt-3 text-sm break-all font-mono">{successDebateId}</div>
+                  <div className="mt-3 text-xs break-all font-mono opacity-70">
+                    ID: {successDebateId}
+                  </div>
                   <div className="mt-4 flex gap-3">
                     <a href={`/debate/${successDebateId}`}>
-                      <Button size="sm" variant="secondary">
+                      <Button
+                        size="sm"
+                        className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
+                      >
                         View Status
                       </Button>
                     </a>
                     <a href={`/verdict/${successDebateId}`}>
-                      <Button size="sm">View Verdict</Button>
+                      <Button
+                        size="sm"
+                        className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
+                      >
+                        View Verdict
+                      </Button>
                     </a>
                   </div>
                 </div>
@@ -599,7 +613,7 @@ export default function Home() {
                 <Button
                   onClick={handleValidate}
                   disabled={isSubmitting || !prdText.trim()}
-                  className="group px-12 py-4 text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white border-0 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="group px-12 py-4 text-lg font-semibold bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white border-0 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span className="mr-3">{isSubmitting ? '⏳' : '✨'}</span>
                   {isSubmitting ? 'Starting Validation…' : 'Validate My PRD'}
@@ -636,7 +650,7 @@ export default function Home() {
                 <span className="text-lg">📊</span> Sample Output
               </Badge>
               <h2 className="text-4xl sm:text-5xl font-black mb-4">
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 dark:from-purple-400 dark:via-pink-400 dark:to-blue-400">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]">
                   What You Get Back
                 </span>
               </h2>
@@ -673,8 +687,8 @@ export default function Home() {
                       {sampleVerdict.verdict.confidence * 100}% Confidence
                     </Badge>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-900/50 inline-block px-3 py-1.5 rounded-full">
-                    ID: {sampleVerdict.debate_id}
+                  <p className="text-sm text-gray-700 dark:text-gray-200 font-semibold">
+                    Idea: {sampleVerdict.idea_title}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -682,7 +696,7 @@ export default function Home() {
                     variant="primary"
                     size="sm"
                     onClick={handleDownloadJson}
-                    className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                    className="flex items-center gap-2 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -903,14 +917,14 @@ export default function Home() {
                 quote:
                   'Could save you months by validating ideas before you build them. Get honest feedback on your concept.',
                 potential: 'Potential Founder',
-                result: 'After trying ARENA',
+                result: 'After trying IdeaAudit',
                 emoji: '⏰',
               },
               {
                 quote:
                   "Get the truth about your idea. No more just 'that sounds good' - clear, actionable verdicts.",
                 potential: 'Your Name Here',
-                result: 'Using ARENA',
+                result: 'Using IdeaAudit',
                 emoji: '💡',
               },
               {
@@ -955,7 +969,7 @@ export default function Home() {
             <a href="#validate-now">
               <Button
                 size="lg"
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
               >
                 Start Your Story Today
               </Button>
@@ -1094,26 +1108,28 @@ export default function Home() {
       </Section>
 
       {/* CTA Section */}
-      <Section className="bg-gradient-to-r from-red-500 to-purple-600 text-white">
+      <Section className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white">
         <Container size="lg" className="text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
             Ready to Validate Your Next Big Idea?
           </h2>
           <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
-            Join thousands of founders who use ARENA to make better decisions. Start free, no credit
-            card required.
+            Join thousands of founders who use IdeaAudit to make better decisions. Start free, no
+            credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
               className="bg-white text-gray-900 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700"
             >
-              Start Free Trial →
+              <span className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
+                Start Free Trial →
+              </span>
             </Button>
             <Button
               variant="secondary"
               size="lg"
-              className="border-white text-white hover:bg-white hover:text-gray-900 dark:border-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
+              className="border-white text-black hover:bg-white hover:text-gray-900 dark:border-gray-300 dark:hover:bg-gray-800 dark:hover:text-white"
             >
               Schedule Demo
             </Button>
@@ -1130,10 +1146,10 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <div className="w-8 h-8 bg-gradient-to-br from-red-500 to-purple-600 rounded-lg flex items-center justify-center text-xl">
+                <div className="w-8 h-8 bg-gradient-to-br from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] rounded-lg flex items-center justify-center text-xl">
                   🎯
                 </div>
-                <span className="text-xl font-bold">ARENA</span>
+                <span className="text-xl font-bold">IdeaAudit</span>
               </div>
               <p className="text-gray-400 text-sm">
                 Agentic idea validation platform. Disagree by default, validate with evidence.
@@ -1216,7 +1232,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2024 ARENA. All rights reserved. Built with ❤️ for founders.</p>
+            <p>&copy; 2024 IdeaAudit. All rights reserved. Built with ❤️ for founders.</p>
           </div>
         </Container>
       </footer>
@@ -1240,6 +1256,7 @@ function ToastAutoDismiss({
 }
 
 const sampleVerdict = {
+  idea_title: 'SkillMatch AI',
   debate_id: '3cfdc574-55d0-432d-8387-52ffe0fe7dba',
   verdict: {
     decision: 'Pivot',

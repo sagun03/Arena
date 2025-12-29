@@ -10,7 +10,7 @@ export function ThemeProvider({ children }: PropsWithChildren) {
       defaultTheme="light"
       enableSystem={false}
       disableTransitionOnChange={false}
-      storageKey="arena-theme"
+      storageKey="ideaaudit-theme"
       themes={['light', 'dark']}
     >
       {children}

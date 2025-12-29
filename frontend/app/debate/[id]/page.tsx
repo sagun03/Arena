@@ -12,6 +12,7 @@ type DebateState = {
   status: string
   transcript: Array<any>
   error?: string | null
+  idea_title?: string
 }
 
 export default function DebatePage() {
@@ -72,7 +73,7 @@ export default function DebatePage() {
               <span className="text-lg">💬</span> Debate Transcript
             </Badge>
             <h1 className="text-5xl sm:text-6xl font-black mb-3">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 dark:from-purple-400 dark:via-pink-400 dark:to-blue-400">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]">
                 Live Analysis
               </span>
             </h1>
@@ -81,8 +82,8 @@ export default function DebatePage() {
             </p>
 
             <div className="inline-flex items-center gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md rounded-full px-6 py-3 shadow-lg border border-slate-200/50 dark:border-slate-700/50 mb-6">
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                {id || '—'}
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                {state?.idea_title || 'Untitled Idea'}
               </span>
               <span className="text-gray-300 dark:text-gray-600">•</span>
               <Badge
@@ -97,6 +98,10 @@ export default function DebatePage() {
               >
                 {state?.status || 'pending'}
               </Badge>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-mono">
+                {id || '—'}
+              </span>
               <span className="text-gray-300 dark:text-gray-600">•</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {lastUpdated || 'Not updated'}
@@ -148,7 +153,7 @@ export default function DebatePage() {
               <a href={`/verdict/${id}`}>
                 <Button
                   size="sm"
-                  className="shadow-md hover:shadow-xl transition-all bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                  className="shadow-md hover:shadow-xl transition-all bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
                 >
                   <svg
                     className="w-4 h-4 mr-2"
@@ -328,9 +333,7 @@ export default function DebatePage() {
                                   Round {round}
                                 </Badge>
                               )}
-                              {type?.includes(':start') && agent !== 'System' && (
-                                <span className="inline-block animate-spin ml-2">⟳</span>
-                              )}
+                              {/* Removed loading spinner on agent start to avoid lingering icons */}
                             </div>
                             <span className="text-xs opacity-60">{timestamp}</span>
                           </div>

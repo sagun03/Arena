@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Brand gradient variables aligned with Logo palette */
+:root {
+  --brand-gradient-start: #a78bfa; /* light mode start */
+  --brand-gradient-end: #6366f1; /* light mode end */
+}
+.dark {
+  --brand-gradient-start: #c4b5fd; /* dark mode start */
+  --brand-gradient-end: #8b5cf6; /* dark mode end */
+}
+
 /* Custom animations and styles */
 @keyframes gradient {
   0% {

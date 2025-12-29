@@ -1,6 +1,6 @@
-# ARENA Frontend
+# IdeaAudit Frontend
 
-Next.js 16 frontend for the ARENA platform.
+Next.js 16 frontend for the IdeaAudit platform.
 
 ## Setup
 

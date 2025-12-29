@@ -210,6 +210,7 @@ class IdeaValidationResponse(BaseModel):
 
     debate_id: str = Field(..., description="Unique identifier for the debate session")
     message: str = Field(..., description="Status message")
+    idea_title: str = Field(default="Untitled Idea", description="Extracted idea title for display")
 
 
 class TranscriptEntry(BaseModel):
@@ -232,6 +233,7 @@ class DebateResponse(BaseModel):
     status: str = Field(..., description="Status: pending, in_progress, completed, failed")
     transcript: list = Field(default_factory=list, description="Chat-like debate transcript")
     error: str | None = Field(None, description="Error message if debate failed")
+    idea_title: str = Field(default="Untitled Idea", description="Title of the idea being debated")
 
 
 class VerdictResponse(BaseModel):
@@ -279,7 +281,17 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
             "started_at": datetime.utcnow().isoformat(),
         }
 
-        # Save initial state
+        # Best-effort: extract idea title up front so UI can show name not ID
+        idea_title = "Untitled Idea"
+        try:
+            idea = await extract_idea_from_prd(request.prd_text)
+            idea_title = idea.extracted_structure.metadata.get("title", idea_title)
+            initial_state["idea_title"] = idea_title
+        except Exception:
+            # If extraction fails, continue without blocking
+            pass
+
+        # Save initial state (with optional idea_title)
         await save_debate_state(debate_id, initial_state)
 
         # Start background debate execution (non-blocking)
@@ -287,7 +299,8 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
 
         return IdeaValidationResponse(
             debate_id=debate_id,
-            message="Debate session created successfully. Use debate_id to track progress.",
+            message="Debate session created successfully.",
+            idea_title=idea_title,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to start debate: {str(e)}")
@@ -327,6 +340,7 @@ async def get_debate(
     return DebateResponse(
         debate_id=debate_id,
         status=state_dict.get("status", "pending"),
+        idea_title=state_dict.get("idea_title", "Untitled Idea"),
         transcript=chat_transcript,
         error=state_dict.get("error"),
     )
@@ -576,8 +590,15 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
         # Extract PRD structure
         idea = await extract_idea_from_prd(prd_text)
 
+        # Update state with idea title
+        state = await get_debate_state(debate_id) or {}
+        idea_title = idea.extracted_structure.metadata.get("title", "Untitled Idea")
+        state["idea_title"] = idea_title
+        await save_debate_state(debate_id, state)
+
         # Instantiate LLM and agents
         llm = get_gemini_llm(temperature=0.3)
+
         judge = JudgeAgent(llm=llm, debate_id=debate_id)
         skeptic = SkepticAgent(debate_id=debate_id)
         customer = CustomerAgent(debate_id=debate_id)

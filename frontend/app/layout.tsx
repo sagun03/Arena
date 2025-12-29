@@ -11,7 +11,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'ARENA - Agentic Idea Validation Platform',
+  title: 'IdeaAudit - Agentic Idea Validation Platform',
   description: 'Disagree by default. Validate ideas through structured adversarial reasoning.',
 }
 

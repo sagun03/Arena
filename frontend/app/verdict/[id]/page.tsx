@@ -80,6 +80,7 @@ export default function VerdictPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string>('')
+  const [ideaTitle, setIdeaTitle] = useState<string | null>(null)
 
   async function fetchVerdict() {
     try {
@@ -90,6 +91,13 @@ export default function VerdictPage() {
       if (!res.ok) throw new Error(`Failed: ${res.status}`)
       const json = await res.json()
       setData(json)
+      try {
+        const stateRes = await fetch(`${apiUrl}/arena/debate/${id}`)
+        if (stateRes.ok) {
+          const stateJson = await stateRes.json()
+          setIdeaTitle(stateJson?.idea_title ?? null)
+        }
+      } catch {}
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch verdict')
     } finally {
@@ -134,7 +142,7 @@ export default function VerdictPage() {
               <span className="text-lg">⚖️</span> Final Verdict Report
             </Badge>
             <h1 className="text-5xl sm:text-6xl font-black mb-3">
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 dark:from-purple-400 dark:via-pink-400 dark:to-blue-400">
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]">
                 Idea Validation
               </span>
             </h1>
@@ -143,6 +151,10 @@ export default function VerdictPage() {
             </p>
 
             <div className="inline-flex items-center gap-3 bg-white/60 dark:bg-slate-800/60 backdrop-blur-md rounded-full px-6 py-3 shadow-lg border border-slate-200/50 dark:border-slate-700/50 mb-6">
+              <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                {ideaTitle || 'Untitled Idea'}
+              </span>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
               <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                 {id || '—'}
               </span>
@@ -175,7 +187,7 @@ export default function VerdictPage() {
               <a href={`/debate/${id}`}>
                 <Button
                   size="sm"
-                  className="shadow-md hover:shadow-xl transition-all bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                  className="shadow-md hover:shadow-xl transition-all bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
                 >
                   <svg
                     className="w-4 h-4 mr-2"
@@ -288,13 +300,13 @@ export default function VerdictPage() {
                         const url = URL.createObjectURL(blob)
                         const a = document.createElement('a')
                         a.href = url
-                        a.download = `arena-verdict-${id}.json`
+                        a.download = `ideaaudit-verdict-${id}.json`
                         document.body.appendChild(a)
                         a.click()
                         document.body.removeChild(a)
                         URL.revokeObjectURL(url)
                       }}
-                      className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                      className="flex items-center gap-2 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
                     >
                       <svg
                         className="w-4 h-4"

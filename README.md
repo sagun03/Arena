@@ -1,14 +1,14 @@
-# ARENA – Agentic Idea Validation Platform
+# IdeaAudit – Agentic Idea Validation Platform
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 > **"Disagree by default. Validate ideas through structured adversarial reasoning, not optimism."**
 
-ARENA is a multi-agent system that stress-tests business ideas through structured debate. Unlike traditional validators that reinforce optimism, ARENA forces disagreement, surfaces weak logic, and produces evidence-backed verdicts.
+IdeaAudit is a multi-agent system that stress-tests business ideas through structured debate. Unlike traditional validators that reinforce optimism, IdeaAudit forces disagreement, surfaces weak logic, and produces evidence-backed verdicts.
 
 ## 🎯 What It Does
 
-Submit your business idea → ARENA runs it through a 5-round adversarial debate → Get a verdict: **Proceed / Pivot / Kill / Needs More Data**
+Submit your business idea → IdeaAudit runs it through a 5-round adversarial debate → Get a verdict: **Proceed / Pivot / Kill / Needs More Data**
 
 ## ✨ Key Features
 
@@ -160,13 +160,13 @@ Environment variables:
 
 **Phase 2 enabled with intelligent re-ranking.**
 
-ARENA naturally implies memory. With Phase 2, ARENA builds institutional knowledge from past debates:
+IdeaAudit naturally implies memory. With Phase 2, IdeaAudit builds institutional knowledge from past debates:
 
 ### How It Works
 
 **Cross-Domain Pattern Matching with Intelligent Re-Ranking**
 
-1. **Selective Persistence**: After each verdict, ARENA stores:
+1. **Selective Persistence**: After each verdict, IdeaAudit stores:
    - Idea embedding via semantic search
    - Verdict decision (Proceed/Pivot/Kill/NeedsMoreData)
    - Top 3 kill-shots with severity
@@ -210,7 +210,7 @@ Without Phase 2: *"Cool multi-agent debate demo"*
 
 With Phase 2 + *"ML-powered institutional memory system that learns failure patterns across industries"*
 
-This transforms ARENA from a one-off validation tool into a platform that gets smarter with every debate.
+This transforms IdeaAudit from a one-off validation tool into a platform that gets smarter with every debate.
 
 
 ## �📄 License
@@ -219,4 +219,4 @@ Licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for deta
 
 ---
 
-**Remember**: ARENA is designed to be harsh, not helpful. If your idea survives ARENA's adversarial reasoning, you've likely found something worth building.
+**Remember**: IdeaAudit is designed to be harsh, not helpful. If your idea survives IdeaAudit's adversarial reasoning, you've likely found something worth building.
