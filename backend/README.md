@@ -2,6 +2,8 @@
 
 FastAPI backend for the ARENA platform.
 
+Phase 2 treats historical debates as training data, not memory, enabling offline learning and evaluation while preserving deterministic inference paths.
+
 ## Setup
 
 1. **Install dependencies**:

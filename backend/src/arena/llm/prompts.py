@@ -242,6 +242,15 @@ Your role: Attack the idea from a short-seller's perspective.
 **Previous Round Context:**
 {previous_context}
 
+**Historical Precedents (if provided):**
+{historical_context}
+
+**Historical Precedents (if provided):**
+{historical_context}
+
+**Historical Precedents (if provided):**
+{historical_context}
+
 **Your Task:**
 Attack this idea by identifying:
 1. **Fatal Flaws**: What could kill this idea?
@@ -450,6 +459,9 @@ Your role: Analyze technical and business feasibility, then provide constrained 
 **Previous Round Context:**
 - Attacks: {attacks}
 - Evidence: {evidence_tags}
+
+**Historical Precedents (if provided):**
+{historical_context}
 
 **Your Task:**
 1. **Feasibility Analysis**: What are the technical/business challenges?

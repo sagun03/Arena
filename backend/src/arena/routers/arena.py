@@ -4,7 +4,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from arena.agents.builder_agent import BuilderAgent
 from arena.agents.customer_agent import CustomerAgent
@@ -16,6 +16,7 @@ from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.decision_evidence import DecisionEvidence
 from arena.models.idea import ExtractedStructure, Idea, Section
 from arena.models.verdict import Verdict
+from arena.monitoring.metrics import logger
 from arena.state_manager import get_debate_state, save_debate_state
 from arena.vectorstore.embeddings import embed_texts
 from arena.vectorstore.historical_store import get_historical_store
@@ -25,18 +26,13 @@ from pydantic import BaseModel, Field
 router = APIRouter()
 
 
-def detect_idea_domain(extracted_structure: Dict[str, Any]) -> str:
-    """
-    Detect idea domain from extracted structure key facts.
+def detect_idea_domain(
+    extracted_structure: Dict[str, Any],
+    explicit_domain: Optional[str] = None,
+    debate_id: Optional[str] = None,
+) -> str:
+    """Detect domain from key facts, optionally overridden by user-provided domain."""
 
-    Returns one of: SaaS, Marketplace, FinTech, B2B, B2C, or 'general' as fallback.
-
-    Args:
-        extracted_structure: Extracted structure from PRD with key_facts
-
-    Returns:
-        Domain string (SaaS, Marketplace, FinTech, B2B, B2C, or 'general')
-    """
     idea_domain = "general"
     if extracted_structure.get("key_facts"):
         key_facts_str = json.dumps(extracted_structure.get("key_facts", {})).lower()
@@ -50,6 +46,17 @@ def detect_idea_domain(extracted_structure: Dict[str, Any]) -> str:
             idea_domain = "B2B"
         elif "b2c" in key_facts_str:
             idea_domain = "B2C"
+
+    if explicit_domain:
+        if explicit_domain != idea_domain:
+            logger.info(
+                "domain_disagreement debate_id=%s explicit=%s detected=%s",
+                debate_id,
+                explicit_domain,
+                idea_domain,
+            )
+        return explicit_domain
+
     return idea_domain
 
 
@@ -204,6 +211,10 @@ class IdeaValidationRequest(BaseModel):
     """Request model for idea validation"""
 
     prd_text: str = Field(..., description="Raw PRD/plan text from ChatGPT or similar")
+    domain: Optional[str] = Field(
+        default=None,
+        description="Optional domain override (SaaS, Marketplace, FinTech, B2B, B2C, etc.)",
+    )
 
 
 class IdeaValidationResponse(BaseModel):
@@ -344,6 +355,7 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
             "round_status": "pending",
             "transcript": [],
             "started_at": datetime.utcnow().isoformat(),
+            "requested_domain": request.domain,
         }
 
         # Best-effort: extract idea title up front so UI can show name not ID
@@ -685,6 +697,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
         state = await get_debate_state(debate_id) or {}
         idea_title = idea.extracted_structure.metadata.get("title", "Untitled Idea")
         state["idea_title"] = idea_title
+        state["requested_domain"] = pre_state.get("requested_domain")
         await save_debate_state(debate_id, state)
 
         # Instantiate LLM and agents
@@ -735,6 +748,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
 
         # Phase 2: Retrieve similar past ideas for historical context
         historical_context_text = ""
+        historical_precedents: list[dict[str, Any]] = []
         try:
             historical_store = get_historical_store()
             if historical_store.enabled:
@@ -744,14 +758,30 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
                 idea_embedding = embeddings[0]
 
                 # Detect domain from extracted structure
-                idea_domain = detect_idea_domain(extracted_structure)
+                requested_domain = pre_state.get("requested_domain")
+                idea_domain = detect_idea_domain(
+                    extracted_structure,
+                    explicit_domain=requested_domain,
+                    debate_id=debate_id,
+                )
+
+                # Persist detected domain for downstream use
+                state = await get_debate_state(debate_id) or {}
+                state["idea_domain"] = idea_domain
+                await save_debate_state(debate_id, state)
 
                 # Retrieve semantically similar past verdicts
                 similar_ideas = await historical_store.retrieve_similar_ideas(
                     query_embedding=idea_embedding,
                     n_results=5,
                     domain_filter=idea_domain if idea_domain != "general" else None,
+                    idea_text=idea_summary,
                 )
+
+                historical_precedents = similar_ideas
+                if state is not None:
+                    state["historical_precedents"] = historical_precedents
+                    await save_debate_state(debate_id, state)
 
                 if similar_ideas:
                     # Format historical context for agents
@@ -789,6 +819,10 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
                                 f"Retrieved {len(similar_ideas)} cross-domain patterns. "
                                 f"Agents will challenge against these."
                             ),
+                            "metadata": {
+                                "precedent_ids": [p.get("id") for p in similar_ideas],
+                                "idea_domain": idea_domain,
+                            },
                             "timestamp": datetime.utcnow().isoformat(),
                         }
                     )
@@ -813,6 +847,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             idea_text=idea.original_prd_text,
             extracted_structure=extracted_structure,
             previous_context=clarification,
+            historical_context=historical_context_text,
         )
         skeptic_text, skeptic_metadata = format_agent_response(skeptic_result, "Skeptic")
         await append_event(
@@ -840,6 +875,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             idea_text=idea.original_prd_text,
             extracted_structure=extracted_structure,
             previous_context=clarification,
+            historical_context=historical_context_text,
         )
         customer_text, customer_metadata = format_agent_response(customer_result, "Customer")
         await append_event(
@@ -867,6 +903,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             idea_text=idea.original_prd_text,
             extracted_structure=extracted_structure,
             previous_context=clarification,
+            historical_context=historical_context_text,
         )
         market_text, market_metadata = format_agent_response(market_result, "Market")
         await append_event(
@@ -926,6 +963,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             extracted_structure=extracted_structure,
             attacks=attacks,
             evidence_tags=round2_evidence,
+            historical_context=historical_context_text,
         )
         defense_text, defense_metadata = format_agent_response(defense_result, "Builder")
         await append_event(
@@ -1027,11 +1065,17 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
                 ]
 
                 # Detect domain from extracted structure
-                idea_domain = detect_idea_domain(extracted_structure)
+                state = await get_debate_state(debate_id) or {}
+                idea_domain = detect_idea_domain(
+                    extracted_structure,
+                    explicit_domain=state.get("requested_domain"),
+                    debate_id=debate_id,
+                )
 
                 # Create decision evidence
                 decision_evidence = DecisionEvidence(
                     debate_id=debate_id,
+                    source_debate_id=debate_id,
                     idea_summary=idea_summary,
                     idea_embedding=idea_embedding,
                     verdict_decision=verdict_obj.decision,

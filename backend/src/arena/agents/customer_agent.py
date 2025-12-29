@@ -47,6 +47,7 @@ class CustomerAgent(BaseWorkerAgent):
         idea_text: str,
         extracted_structure: Dict[str, Any],
         previous_context: Optional[Dict[str, Any]] = None,
+        historical_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Analyze idea from customer perspective.
@@ -65,6 +66,7 @@ class CustomerAgent(BaseWorkerAgent):
             extracted_structure=extracted_structure,
             previous_context=previous_context,
             round_number=2,
+            historical_context=historical_context,
         )
 
         return result

@@ -1,7 +1,7 @@
 """Decision evidence model for historical persistence"""
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,7 +10,11 @@ class DecisionEvidence(BaseModel):
     """Persistent evidence from a debate verdict for historical analysis"""
 
     debate_id: str = Field(..., description="Unique debate identifier")
-    idea_summary: str = Field(..., description="Short summary of the idea (first 500 chars of PRD)")
+    source_debate_id: Optional[str] = Field(
+        default=None,
+        description="Optional source debate id when evidence is reused",
+    )
+    idea_summary: str = Field(..., description="Short idea summary (first 500 chars of PRD)")
     idea_embedding: List[float] = Field(..., description="Embedding vector for search")
     verdict_decision: str = Field(
         ..., description="Final decision: 'Proceed', 'Pivot', 'Kill', or 'NeedsMoreData'"
@@ -41,7 +45,8 @@ class DecisionEvidence(BaseModel):
         json_schema_extra = {
             "example": {
                 "debate_id": "uuid-123",
-                "idea_summary": "A marketplace connecting freelance designers with small businesses...",
+                "source_debate_id": "uuid-123",
+                "idea_summary": "A marketplace connecting freelance designers with SMBs...",
                 "idea_embedding": [0.1, 0.2, 0.3, ...],
                 "verdict_decision": "Pivot",
                 "overall_score": 42,

@@ -49,6 +49,7 @@ class BuilderAgent(BaseWorkerAgent):
         extracted_structure: Dict[str, Any],
         attacks: Dict[str, str],
         evidence_tags: List[EvidenceTag],
+        historical_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Provide constrained defense of the idea.
@@ -66,6 +67,7 @@ class BuilderAgent(BaseWorkerAgent):
         extracted_structure_str = json.dumps(extracted_structure, indent=2)
         attacks_str = json.dumps(attacks, indent=2)
         evidence_tags_str = json.dumps([tag.model_dump() for tag in evidence_tags], indent=2)
+        historical_context_str = historical_context or ""
 
         # Format prompt with attacks and evidence
         prompt = self.format_prompt(
@@ -74,6 +76,7 @@ class BuilderAgent(BaseWorkerAgent):
             extracted_structure=extracted_structure_str,
             attacks=attacks_str,
             evidence_tags=evidence_tags_str,
+            historical_context=historical_context_str,
         )
 
         # Invoke LLM

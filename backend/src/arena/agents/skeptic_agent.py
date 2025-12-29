@@ -46,6 +46,7 @@ class SkepticAgent(BaseWorkerAgent):
         idea_text: str,
         extracted_structure: Dict[str, Any],
         previous_context: Optional[Dict[str, Any]] = None,
+        historical_context: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Attack idea from adversarial perspective.
@@ -64,6 +65,7 @@ class SkepticAgent(BaseWorkerAgent):
             extracted_structure=extracted_structure,
             previous_context=previous_context,
             round_number=2,
+            historical_context=historical_context,
         )
 
         return result

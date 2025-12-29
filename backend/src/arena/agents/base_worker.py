@@ -42,6 +42,7 @@ class BaseWorkerAgent(BaseAgent):
         previous_context: Optional[dict] = None,
         round_number: int = 2,
         attacks: Optional[dict] = None,
+        historical_context: Optional[str] = None,
     ) -> dict:
         """
         Execute worker agent task.
@@ -52,6 +53,7 @@ class BaseWorkerAgent(BaseAgent):
             previous_context: Context from previous rounds
             round_number: Current debate round number
             attacks: Optional attacks dict for defense agents
+            historical_context: Optional historical context for formatting
 
         Returns:
             Processed response with evidence tags
@@ -62,6 +64,7 @@ class BaseWorkerAgent(BaseAgent):
         extracted_structure_str = json.dumps(extracted_structure, indent=2)
         previous_context_str = json.dumps(previous_context, indent=2) if previous_context else "{}"
         attacks_str = json.dumps(attacks, indent=2) if attacks else "{}"
+        historical_context_str = historical_context or ""
 
         # Format prompt (only include args used by this agent's template)
         prompt = self.format_prompt(
@@ -70,6 +73,7 @@ class BaseWorkerAgent(BaseAgent):
             extracted_structure=extracted_structure_str,
             previous_context=previous_context_str,
             attacks=attacks_str,  # Added for builder agent
+            historical_context=historical_context_str,
         )
 
         # Invoke LLM
