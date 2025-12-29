@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from arena.agents.base_worker import BaseWorkerAgent
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prompts import SKEPTIC_PROMPT
+from langchain_core.language_models import BaseChatModel
 
 
 class SkepticAgent(BaseWorkerAgent):
@@ -18,7 +19,12 @@ class SkepticAgent(BaseWorkerAgent):
     - Execution risks
     """
 
-    def __init__(self, debate_id: Optional[str] = None, temperature: float = 0.8):
+    def __init__(
+        self,
+        debate_id: Optional[str] = None,
+        temperature: float = 0.8,
+        llm: Optional[BaseChatModel] = None,
+    ):
         """
         Initialize Skeptic agent.
 
@@ -26,7 +32,7 @@ class SkepticAgent(BaseWorkerAgent):
             debate_id: Optional debate ID for evidence filtering
             temperature: LLM temperature (higher = more adversarial)
         """
-        llm = get_gemini_llm(temperature=temperature)
+        llm = llm or get_gemini_llm(temperature=temperature)
         super().__init__(
             name="Skeptic",
             role="Adversarial short-seller - finds flaws and risks",

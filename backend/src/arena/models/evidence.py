@@ -6,11 +6,11 @@ from pydantic import BaseModel, Field
 
 
 class EvidenceType(str, Enum):
-    """Types of evidence tags"""
+    """Types of evidence tags (aligned with tests)"""
 
-    VERIFIED = "Verified"
-    ASSUMPTION = "Assumption"
-    NEEDS_VALIDATION = "NeedsValidation"
+    EVIDENCE = "evidence"
+    ASSUMPTION = "assumption"
+    NEEDS_VALIDATION = "needs_validation"
 
 
 class EvidenceTag(BaseModel):
@@ -25,7 +25,7 @@ class EvidenceTag(BaseModel):
         json_schema_extra = {
             "example": {
                 "text": "Market size is $10B",
-                "type": "Assumption",
+                "type": "assumption",
                 "agent": "Skeptic",
                 "round": 2,
             }

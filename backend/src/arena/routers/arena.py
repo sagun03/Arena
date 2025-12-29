@@ -14,6 +14,7 @@ from arena.agents.skeptic_agent import SkepticAgent
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.decision_evidence import DecisionEvidence
+from arena.models.idea import ExtractedStructure, Idea, Section
 from arena.models.verdict import Verdict
 from arena.state_manager import get_debate_state, save_debate_state
 from arena.vectorstore.embeddings import embed_texts
@@ -231,6 +232,10 @@ class DebateResponse(BaseModel):
 
     debate_id: str = Field(..., description="Unique identifier for the debate")
     status: str = Field(..., description="Status: pending, in_progress, completed, failed")
+    current_round: int = Field(0, description="Current round number")
+    round_status: str = Field(
+        "pending", description="Round status: pending/in_progress/completed/failed"
+    )
     transcript: list = Field(default_factory=list, description="Chat-like debate transcript")
     error: str | None = Field(None, description="Error message if debate failed")
     idea_title: str = Field(default="Untitled Idea", description="Title of the idea being debated")
@@ -243,6 +248,64 @@ class VerdictResponse(BaseModel):
     verdict: Verdict | None = Field(None, description="Final verdict if completed")
     status: str = Field(..., description="Status: pending, completed, failed")
     message: str = Field(..., description="Status message")
+
+
+@router.get(
+    "/graph/structure",
+    summary="Graph Structure",
+    description="Get static debate graph nodes, edges, and mermaid diagram",
+    tags=["arena"],
+)
+async def get_graph_structure() -> Dict[str, Any]:
+    """
+    Return the static debate graph structure.
+    """
+    nodes = [
+        {"id": "clarification", "label": "Round 1: Clarification"},
+        {"id": "attacks", "label": "Round 2: Attacks & Analyses"},
+        {"id": "defense", "label": "Round 3: Defense"},
+        {"id": "verdict", "label": "Round 5: Verdict"},
+    ]
+    edges = [
+        {"from": "clarification", "to": "attacks"},
+        {"from": "attacks", "to": "defense"},
+        {"from": "defense", "to": "verdict"},
+    ]
+    mermaid = (
+        "graph TD; clarification[Clarification]-->attacks[Attacks]; "
+        "attacks-->defense[Defense]; defense-->verdict[Verdict];"
+    )
+    return {"nodes": nodes, "edges": edges, "mermaid": mermaid}
+
+
+@router.get(
+    "/debate/{debate_id}/graph",
+    summary="Debate Graph Progress",
+    description="Get progress across debate graph nodes",
+    tags=["arena"],
+)
+async def get_debate_graph(debate_id: str) -> Dict[str, Any]:
+    """
+    Return graph progress based on current_round.
+    """
+    state = await get_debate_state(debate_id) or {}
+    current_round = int(state.get("current_round", 0))
+    round_status = state.get("round_status", state.get("status", "pending"))
+
+    ordered_nodes = ["clarification", "attacks", "defense", "verdict"]
+    # Map round numbers to nodes: 1->clarification, 2->attacks, 3->defense, 5->verdict
+    round_to_index = {1: 0, 2: 1, 3: 2, 5: 3}
+    idx = round_to_index.get(current_round, -1)
+    completed_nodes = ordered_nodes[: max(0, idx)] if idx >= 0 else []
+    pending_nodes = [n for n in ordered_nodes if n not in completed_nodes]
+
+    return {
+        "debate_id": debate_id,
+        "current_round": current_round,
+        "round_status": round_status,
+        "completed_nodes": completed_nodes,
+        "pending_nodes": pending_nodes,
+    }
 
 
 @router.post(
@@ -277,6 +340,8 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
         initial_state: Dict[str, Any] = {
             "debate_id": debate_id,
             "status": "pending",
+            "current_round": 0,
+            "round_status": "pending",
             "transcript": [],
             "started_at": datetime.utcnow().isoformat(),
         }
@@ -284,9 +349,11 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
         # Best-effort: extract idea title up front so UI can show name not ID
         idea_title = "Untitled Idea"
         try:
-            idea = await extract_idea_from_prd(request.prd_text)
+            idea = await extract_idea_from_prd(request.prd_text, debate_id=debate_id)
             idea_title = idea.extracted_structure.metadata.get("title", idea_title)
             initial_state["idea_title"] = idea_title
+            # Persist extracted structure for deduping later
+            initial_state["extracted_structure"] = idea.extracted_structure.model_dump()
         except Exception:
             # If extraction fails, continue without blocking
             pass
@@ -340,6 +407,8 @@ async def get_debate(
     return DebateResponse(
         debate_id=debate_id,
         status=state_dict.get("status", "pending"),
+        current_round=state_dict.get("current_round", 0),
+        round_status=state_dict.get("round_status", state_dict.get("status", "pending")),
         idea_title=state_dict.get("idea_title", "Untitled Idea"),
         transcript=chat_transcript,
         error=state_dict.get("error"),
@@ -508,7 +577,7 @@ async def get_verdict(
     if not state_dict:
         raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
 
-    status = state_dict.get("status", "pending")
+    status = state_dict.get("status", state_dict.get("round_status", "pending"))
     verdict_dict = state_dict.get("verdict")
 
     if status != "completed" or not verdict_dict:
@@ -571,6 +640,8 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             {
                 "transcript": transcript,
                 "status": state.get("status", "in_progress"),
+                "current_round": event.get("round", state.get("current_round", 0)),
+                "round_status": "in_progress",
                 "last_updated": datetime.utcnow().isoformat(),
             }
         )
@@ -587,8 +658,28 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
         )
         await save_debate_state(debate_id, state)
 
-        # Extract PRD structure
-        idea = await extract_idea_from_prd(prd_text)
+        # Extract PRD structure (reuse if available)
+        pre_state = await get_debate_state(debate_id) or {}
+        extracted_data = pre_state.get("extracted_structure")
+        if extracted_data:
+            sections = [
+                Section(
+                    title=s.get("title", "Untitled"),
+                    content=s.get("content", ""),
+                    category=s.get("category", "other"),
+                    key_points=s.get("key_points", []),
+                )
+                for s in extracted_data.get("sections", [])
+            ]
+            extracted_structure = ExtractedStructure(
+                sections=sections,
+                key_facts=extracted_data.get("key_facts", {}),
+                lists=extracted_data.get("lists", {}),
+                metadata=extracted_data.get("metadata", {}),
+            )
+            idea = Idea(original_prd_text=prd_text, extracted_structure=extracted_structure)
+        else:
+            idea = await extract_idea_from_prd(prd_text, debate_id=debate_id)
 
         # Update state with idea title
         state = await get_debate_state(debate_id) or {}
@@ -907,6 +998,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
         final_state.update(
             {
                 "status": "completed",
+                "round_status": "completed",
                 "verdict": verdict.model_dump() if hasattr(verdict, "model_dump") else verdict,
                 "last_updated": datetime.utcnow().isoformat(),
             }
@@ -965,6 +1057,7 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
         fail_state.update(
             {
                 "status": "failed",
+                "round_status": "failed",
                 "error": str(e),
                 "last_updated": datetime.utcnow().isoformat(),
             }

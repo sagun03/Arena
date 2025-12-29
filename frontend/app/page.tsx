@@ -27,6 +27,8 @@ export default function Home() {
   const [successIdeaTitle, setSuccessIdeaTitle] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const rotatingWords = ['Bad Ideas', 'Weak Concepts', 'Shaky Pitches', 'Dead-End Plans']
+  const [wordIndex, setWordIndex] = useState(0)
 
   // Debounce PRD input for smoother UX on large text
   const debouncedPrd = useMemo(() => prdText, [prdText])
@@ -36,6 +38,13 @@ export default function Home() {
     }, 250)
     return () => clearTimeout(t)
   }, [debouncedPrd])
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setWordIndex(current => (current + 1) % rotatingWords.length)
+    }, 2200)
+    return () => clearInterval(intervalId)
+  }, [rotatingWords.length])
 
   async function handleValidate() {
     setIsSubmitting(true)
@@ -211,17 +220,40 @@ export default function Home() {
           <div className="absolute top-40 -right-24 h-80 w-80 rounded-full bg-gradient-to-br from-pink-300/30 to-orange-300/30 blur-3xl" />
           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-40 w-[70%] rounded-[80px] bg-gradient-to-r from-blue-200/30 to-purple-200/30 blur-2xl" />
         </div>
-        <Container size="lg" className="text-center">
+        <Container className="text-center">
           <Badge
             variant="secondary"
             className="mb-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
           >
             🚀 The Future of Idea Validation
           </Badge>
+          <style>{`
+            @keyframes word-fade {
+              0% { opacity: 0; transform: translateY(12px); }
+              20% { opacity: 1; transform: translateY(0); }
+              80% { opacity: 1; transform: translateY(0); }
+              100% { opacity: 0; transform: translateY(-8px); }
+            }
+            .word-cycle {
+              display: inline-block;
+              animation: word-fade 2.2s ease-in-out;
+              will-change: transform, opacity;
+            }
+          `}</style>
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-6 leading-tight">
-            Stop Wasting Time on{' '}
-            <span className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent">
-              Bad Ideas
+            Stop Wasting Time on&nbsp;
+            <span className="relative inline-block align-bottom">
+              <span className="invisible whitespace-nowrap">
+                {rotatingWords.reduce((longest, word) =>
+                  word.length > longest.length ? word : longest
+                )}
+              </span>
+              <span
+                key={rotatingWords[wordIndex]}
+                className="word-cycle absolute left-0 top-0 whitespace-nowrap bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent"
+              >
+                {rotatingWords[wordIndex]}
+              </span>
             </span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">

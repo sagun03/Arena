@@ -14,12 +14,6 @@ def test_settings() -> Settings:
     """Create test settings with mock values"""
     return Settings(
         google_api_key="test-google-api-key",
-        langsmith_api_key=None,  # Disable LangSmith for tests
-        langsmith_project="test-project",
-        redis_host="localhost",
-        redis_port=6379,
-        redis_db=0,
-        redis_password=None,
         chromadb_path="./test_chroma_db",
         environment="test",
         log_level="DEBUG",
@@ -91,5 +85,3 @@ def mock_env_vars(monkeypatch):
     """Mock environment variables for tests"""
     monkeypatch.setenv("GOOGLE_API_KEY", "test-google-api-key")
     monkeypatch.setenv("LANGSMITH_API_KEY", "")
-    monkeypatch.setenv("REDIS_HOST", "localhost")
-    monkeypatch.setenv("REDIS_PORT", "6379")

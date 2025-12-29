@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from arena.agents.base_worker import BaseWorkerAgent
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prompts import CUSTOMER_PROMPT
+from langchain_core.language_models import BaseChatModel
 
 
 class CustomerAgent(BaseWorkerAgent):
@@ -19,7 +20,12 @@ class CustomerAgent(BaseWorkerAgent):
     - Customer segment analysis
     """
 
-    def __init__(self, debate_id: Optional[str] = None, temperature: float = 0.7):
+    def __init__(
+        self,
+        debate_id: Optional[str] = None,
+        temperature: float = 0.7,
+        llm: Optional[BaseChatModel] = None,
+    ):
         """
         Initialize Customer agent.
 
@@ -27,7 +33,7 @@ class CustomerAgent(BaseWorkerAgent):
             debate_id: Optional debate ID for evidence filtering
             temperature: LLM temperature
         """
-        llm = get_gemini_llm(temperature=temperature)
+        llm = llm or get_gemini_llm(temperature=temperature)
         super().__init__(
             name="Customer",
             role="Customer reality - analyzes pain points and willingness to pay",

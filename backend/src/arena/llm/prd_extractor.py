@@ -3,6 +3,7 @@
 import json
 
 from arena.llm.gemini_client import get_gemini_llm
+from arena.llm.rate_control import llm_call_with_limits
 from arena.models.idea import ExtractedStructure, Idea, Section
 
 EXTRACTION_PROMPT = (
@@ -52,7 +53,7 @@ Return only valid JSON, no markdown formatting."""
 )
 
 
-async def extract_idea_from_prd(prd_text: str) -> Idea:
+async def extract_idea_from_prd(prd_text: str, debate_id: str | None = None) -> Idea:
     """
     Dynamically extracts structure from PRD text using Gemini.
 
@@ -68,7 +69,7 @@ async def extract_idea_from_prd(prd_text: str) -> Idea:
     prompt = EXTRACTION_PROMPT.format(prd_text=prd_text)
 
     # Call Gemini
-    response = await llm.ainvoke(prompt)
+    response = await llm_call_with_limits(debate_id, lambda: llm.ainvoke(prompt))
 
     # Parse JSON response
     try:
@@ -117,7 +118,8 @@ async def extract_idea_from_prd(prd_text: str) -> Idea:
     extracted_structure.metadata["title"] = extracted_data.get("title", "Untitled Idea")
 
     # Create Idea object
-    return Idea(original_prd_text=prd_text, extracted_structure=extracted_structure)
+    idea = Idea(original_prd_text=prd_text, extracted_structure=extracted_structure)
+    return idea
 
 
 def prepare_idea_for_embedding(idea: Idea) -> str:

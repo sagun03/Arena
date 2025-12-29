@@ -9,7 +9,7 @@ from arena.llm.prompts import (
     JUDGE_QUALITY_GATE_PROMPT,
     JUDGE_VERDICT_PROMPT,
 )
-from arena.models.evidence import EvidenceTag
+from arena.models.evidence import EvidenceTag, EvidenceType
 from arena.models.idea import Idea
 from arena.models.verdict import Verdict
 from langchain_core.language_models import BaseChatModel
@@ -132,6 +132,24 @@ class JudgeAgent(BaseAgent):
             "raw_response": response,
         }
 
+    async def validate_quality_gate(
+        self,
+        round_number: int | None = None,
+        round_output: Dict[str, Any] = {},
+        previous_context: Optional[Dict[str, Any]] = None,
+        evidence_tags: Optional[List[EvidenceTag]] = None,
+        round_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Validate a round's output (test-friendly signature).
+
+        Supports both (round_type) and legacy (round_number, previous_context) args.
+        """
+        if not round_type:
+            mapping = {1: "clarification", 2: "attacks", 3: "defense", 4: "cross_examination"}
+            round_type = mapping.get(round_number or 0, "unknown")
+        return await self.evaluate_quality_gate(round_type, round_output, evidence_tags)
+
     async def generate_verdict(
         self,
         idea: Idea,
@@ -204,10 +222,10 @@ class JudgeAgent(BaseAgent):
         Returns:
             Validation results
         """
-        verified_count = sum(1 for tag in evidence_tags if tag.type.value == "Verified")
-        assumption_count = sum(1 for tag in evidence_tags if tag.type.value == "Assumption")
+        verified_count = sum(1 for tag in evidence_tags if tag.type == EvidenceType.EVIDENCE)
+        assumption_count = sum(1 for tag in evidence_tags if tag.type == EvidenceType.ASSUMPTION)
         needs_validation_count = sum(
-            1 for tag in evidence_tags if tag.type.value == "NeedsValidation"
+            1 for tag in evidence_tags if tag.type == EvidenceType.NEEDS_VALIDATION
         )
 
         validation_results: Dict[str, Any] = {

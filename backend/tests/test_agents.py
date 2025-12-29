@@ -105,7 +105,7 @@ class TestJudgeAgent:
             round_output={"attacks": {}},
             previous_context={},
         )
-        assert "proceed" in result or "should_proceed" in result
+        assert "decision" in result or "should_proceed" in result
 
 
 class TestWorkerAgents:

@@ -3,7 +3,9 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from arena.llm.rate_control import llm_call_with_limits
 from arena.models.evidence import EvidenceTag, EvidenceType
+from arena.monitoring.metrics import record_llm_call
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
@@ -52,15 +54,23 @@ class BaseAgent:
             LLM response content
         """
         message = HumanMessage(content=prompt)
-        response = await self.llm.ainvoke([message], **kwargs)
+        response = await llm_call_with_limits(
+            self.debate_id,
+            lambda: self.llm.ainvoke([message], **kwargs),
+        )
         content = response.content
         if isinstance(content, str):
+            record_llm_call("agent_invoke", self.debate_id, "ok")
             return content
         elif isinstance(content, list):
             # Handle list of content blocks
-            return str(content[0]) if content else ""
+            result = str(content[0]) if content else ""
+            record_llm_call("agent_invoke", self.debate_id, "ok")
+            return result
         else:
-            return str(content)
+            result = str(content)
+            record_llm_call("agent_invoke", self.debate_id, "ok")
+            return result
 
     def parse_json_response(self, response: str) -> Dict[str, Any]:
         """
@@ -153,6 +163,8 @@ class BaseAgent:
         """
         Format prompt template with provided arguments.
 
+        Gracefully handles missing template variables by providing defaults.
+
         Args:
             template: Prompt template string
             **kwargs: Arguments to format into template
@@ -160,6 +172,16 @@ class BaseAgent:
         Returns:
             Formatted prompt string
         """
+        import re
+
+        # Find all placeholder variables in template
+        placeholders = set(re.findall(r"\{(\w+)\}", template))
+
+        # Add default empty values for missing placeholders
+        for placeholder in placeholders:
+            if placeholder not in kwargs:
+                kwargs[placeholder] = ""
+
         return template.format(**kwargs)
 
     async def process_response(self, response: str, round_number: int) -> Dict[str, Any]:

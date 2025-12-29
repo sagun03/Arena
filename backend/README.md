@@ -53,7 +53,6 @@ backend/
 │   ├── agents/               # Agent implementations
 │   ├── graph/                # LangGraph state machine
 │   ├── llm/                  # LangChain & Gemini setup
-│   ├── redis/                # Redis integration
 │   ├── vectorstore/          # ChromaDB integration
 │   └── observability/        # LangSmith integration
 └── tests/                    # Test suite

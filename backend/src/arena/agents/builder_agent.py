@@ -7,6 +7,7 @@ from arena.agents.base_worker import BaseWorkerAgent
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prompts import BUILDER_PROMPT
 from arena.models.evidence import EvidenceTag
+from langchain_core.language_models import BaseChatModel
 
 
 class BuilderAgent(BaseWorkerAgent):
@@ -20,7 +21,12 @@ class BuilderAgent(BaseWorkerAgent):
     - Implementation challenges
     """
 
-    def __init__(self, debate_id: Optional[str] = None, temperature: float = 0.6):
+    def __init__(
+        self,
+        debate_id: Optional[str] = None,
+        temperature: float = 0.6,
+        llm: Optional[BaseChatModel] = None,
+    ):
         """
         Initialize Builder agent.
 
@@ -28,7 +34,7 @@ class BuilderAgent(BaseWorkerAgent):
             debate_id: Optional debate ID for evidence filtering
             temperature: LLM temperature (lower = more constrained)
         """
-        llm = get_gemini_llm(temperature=temperature)
+        llm = llm or get_gemini_llm(temperature=temperature)
         super().__init__(
             name="Builder",
             role="Feasibility & defense - analyzes technical/business feasibility",

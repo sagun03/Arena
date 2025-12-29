@@ -110,7 +110,7 @@ rm -rf .next node_modules
 ## Docker
 
 ```bash
-# Start all services (backend, frontend, redis)
+# Start all services (backend, frontend)
 docker-compose up
 
 # Start in background

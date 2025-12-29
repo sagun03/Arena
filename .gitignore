@@ -55,8 +55,7 @@ yarn-error.log*
 dist/
 build/
 
-# Redis dumps
-dump.rdb
+# (Redis removed)
 
 # OS
 .DS_Store
