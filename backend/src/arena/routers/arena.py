@@ -7,7 +7,7 @@ from typing import Any, Dict
 from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.verdict import Verdict
 from arena.state_manager import get_debate_state, save_debate_state
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -103,7 +103,7 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
     tags=["arena"],
 )
 async def get_debate(
-    debate_id: str = Field(..., description="Unique debate identifier")
+    debate_id: str = Path(..., description="Unique debate identifier")
 ) -> DebateResponse:
     """
     Get debate state.
@@ -138,7 +138,7 @@ async def get_debate(
     tags=["arena"],
 )
 async def get_verdict(
-    debate_id: str = Field(..., description="Unique debate identifier")
+    debate_id: str = Path(..., description="Unique debate identifier")
 ) -> VerdictResponse:
     """
     Get final verdict.
