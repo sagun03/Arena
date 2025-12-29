@@ -14,6 +14,12 @@ class Settings(BaseSettings):
 
     embedding_model: str = "models/embedding-001"
 
+    # LLM model
+    llm_model: str = "gemini-2.5-flash"
+
+    # Evidence storage toggle
+    store_evidence: bool = True
+
     # Application
     environment: str = "development"
     log_level: str = "INFO"

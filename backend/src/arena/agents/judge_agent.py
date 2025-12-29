@@ -58,7 +58,14 @@ class JudgeAgent(BaseAgent):
         )
 
         # Invoke LLM
+        import sys
+
+        print(f"[Judge] Invoking LLM for clarification...", file=sys.stderr)
         response = await self.invoke(prompt)
+        print(
+            f"[Judge] Got response (len={len(response)}), first 300 chars: {repr(response[:300])}",
+            file=sys.stderr,
+        )
 
         # Parse response
         parsed_response = self.parse_json_response(response)

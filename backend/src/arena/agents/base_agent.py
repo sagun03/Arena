@@ -3,6 +3,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
+from arena.config.settings import settings
 from arena.models.evidence import EvidenceTag, EvidenceType
 from arena.vectorstore.evidence_store import search_similar_evidence, store_evidence
 from langchain_core.language_models import BaseChatModel
@@ -66,6 +67,7 @@ class BaseAgent:
     def parse_json_response(self, response: str) -> Dict[str, Any]:
         """
         Parse JSON response from LLM, handling markdown code blocks.
+        Falls back to structured format if response is plain text.
 
         Args:
             response: Raw LLM response
@@ -76,7 +78,16 @@ class BaseAgent:
         Raises:
             json.JSONDecodeError: If response cannot be parsed
         """
+        import sys
+
         content = response.strip()
+
+        # Debug log for empty or very short responses
+        if not content or len(content) < 10:
+            print(
+                f"[{self.name}] WARNING: Empty/short response (len={len(content)}): {repr(content[:100])}",
+                file=sys.stderr,
+            )
 
         # Remove markdown code blocks if present
         if content.startswith("```json"):
@@ -87,7 +98,22 @@ class BaseAgent:
             content = content[:-3]
         content = content.strip()
 
-        return json.loads(content)
+        if not content:
+            print(
+                f"[{self.name}] ERROR: Empty after stripping. Original: {repr(response[:200])}",
+                file=sys.stderr,
+            )
+            raise ValueError(f"{self.name} returned empty response after code block removal")
+
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            print(
+                f"[{self.name}] WARNING: JSON parse failed, wrapping plain text response",
+                file=sys.stderr,
+            )
+            # Fallback: if it's not JSON, wrap the text response in a response field
+            return {"response": content, "raw_response": response, "parsed_as": "plain_text"}
 
     def extract_evidence_tags(
         self, response_data: Dict[str, Any], round_number: int
@@ -137,6 +163,10 @@ class BaseAgent:
         Returns:
             List of document IDs
         """
+        # If disabled via settings, skip storing to avoid embedding calls/quota
+        if not settings.store_evidence:
+            return []
+
         doc_ids = []
         for tag in evidence_tags:
             metadata = {
@@ -145,8 +175,12 @@ class BaseAgent:
                 "evidence_type": tag.type.value,
                 "debate_id": self.debate_id,
             }
-            doc_id = await store_evidence(tag.text, metadata)
-            doc_ids.append(doc_id)
+            try:
+                doc_id = await store_evidence(tag.text, metadata)
+                doc_ids.append(doc_id)
+            except Exception:
+                # Silently skip storage failures to keep debate running
+                continue
         return doc_ids
 
     async def search_evidence(

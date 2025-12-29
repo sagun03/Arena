@@ -23,8 +23,9 @@ class ExtractedStructure(BaseModel):
     key_facts: Dict[str, str] = Field(
         default_factory=dict, description="Key-value pairs extracted from PRD"
     )
-    lists: Dict[str, List[str]] = Field(
-        default_factory=dict, description="Lists extracted (competitors, features, risks, etc.)"
+    lists: Dict[str, List[Any]] = Field(
+        default_factory=dict,
+        description="Lists extracted (competitors, features, risks, etc.) - can be strings or objects",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
