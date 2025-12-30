@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { RouteProvider } from './providers/route-provider'
 import { ThemeProvider } from './providers/theme-provider'
 import { AuthProvider } from './providers/auth-provider'
+import { CreditsProvider } from './providers/credits-provider'
 import './globals.css'
 
 const inter = Inter({
@@ -35,8 +36,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <RouteProvider>
           <ThemeProvider>
             <AuthProvider>
-              <Toaster richColors position="bottom-center" />
-              {children}
+              <CreditsProvider>
+                <Toaster richColors position="bottom-center" />
+                {children}
+              </CreditsProvider>
             </AuthProvider>
           </ThemeProvider>
         </RouteProvider>

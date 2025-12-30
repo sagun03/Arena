@@ -38,10 +38,17 @@ class Settings(BaseSettings):
     jwt_secret: str | None = None
     jwt_exp_minutes: int = 60
 
-    # CORS
-    cors_allowed_origins: str = (
-        "*"  # comma-separated list, e.g., "http://localhost:3000,https://app.example.com"
-    )
+    # CORS (comma-separated list, e.g., "http://localhost:3000,https://app.example.com")
+    cors_allowed_origins: str = "http://localhost:3000"
+
+    # Stripe billing
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+    stripe_success_url: str = "http://localhost:3000/billing/success"
+    stripe_cancel_url: str = "http://localhost:3000/billing/cancel"
+    stripe_price_starter: str | None = None
+    stripe_price_plus: str | None = None
+    stripe_price_pro: str | None = None
 
     class Config:
         env_file = ".env"

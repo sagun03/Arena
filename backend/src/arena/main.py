@@ -1,7 +1,7 @@
 """FastAPI application entry point"""
 
 from arena.config.settings import settings
-from arena.routers import arena, auth, health
+from arena.routers import arena, auth, billing, health
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -43,6 +43,10 @@ app = FastAPI(
             * **Verdicts**: Get final verdicts and recommendations
             """,
         },
+        {
+            "name": "billing",
+            "description": "Stripe checkout and credit management endpoints.",
+        },
     ],
 )
 
@@ -65,6 +69,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(arena.router, prefix="/arena", tags=["arena"])
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(billing.router, prefix="/billing", tags=["billing"])
 
 
 @app.get("/")

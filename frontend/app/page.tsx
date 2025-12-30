@@ -240,7 +240,11 @@ export default function Home() {
                 <Button asChild variant="secondary" size="sm" className="px-4 py-2">
                   <Link href="/auth/login">Sign In</Link>
                 </Button>
-                <Button asChild size="sm" className="px-4 py-2">
+                <Button
+                  asChild
+                  size="sm"
+                  className="px-4 py-2 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
                   <Link href="/auth/signup">Sign Up</Link>
                 </Button>
               </>

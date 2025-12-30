@@ -8,9 +8,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/button'
 import { Badge } from '@/components/badge'
 import { useAuth } from '@/app/providers/auth-provider'
+import { useCredits } from '@/app/providers/credits-provider'
 import { toast } from 'sonner'
 import { startValidation, getActiveDebates } from '@/lib/arena-service'
 import { CheckCircle, MessageTextCircle01, FileShield01, Target01 } from '@untitledui/icons'
+import { BuyCreditsModal } from '@/components/buy-credits-modal'
 
 interface ValidationResponse {
   debate_id?: string
@@ -46,6 +48,7 @@ const steps = [
 
 export default function ValidatePage() {
   const { user, loading } = useAuth()
+  const { credits, setCredits } = useCredits()
   const router = useRouter()
   const [prd, setPrd] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -53,6 +56,7 @@ export default function ValidatePage() {
   const [result, setResult] = useState<ValidationResponse | null>(null)
   const [activeDebates, setActiveDebates] = useState<ActiveDebateItem[]>([])
   const [activeLoading, setActiveLoading] = useState(false)
+  const [showCreditsModal, setShowCreditsModal] = useState(false)
 
   const readLocalActive = (): ActiveDebateItem[] => {
     if (typeof window === 'undefined') return []
@@ -118,6 +122,10 @@ export default function ValidatePage() {
 
   async function handleValidate() {
     if (!prd.trim()) return
+    if (credits !== null && credits <= 0) {
+      setShowCreditsModal(true)
+      return
+    }
     try {
       setIsSubmitting(true)
       setError(null)
@@ -127,9 +135,16 @@ export default function ValidatePage() {
       if (data?.debate_id) {
         upsertActive({ id: data.debate_id, ideaTitle: data.idea_title, status: 'pending' })
       }
+      if (credits !== null) {
+        setCredits(Math.max(credits - 1, 0))
+      }
       toast.success('Validation started. Jump into the debate or verdict tabs.')
     } catch (err: any) {
+      const status = err?.response?.status
       const message = err?.response?.data?.detail || err?.message || 'Failed to start validation'
+      if (status === 402) {
+        setShowCreditsModal(true)
+      }
       setError(message)
       toast.error(message)
     } finally {
@@ -157,6 +172,7 @@ export default function ValidatePage() {
 
   return (
     <AppShell>
+      <BuyCreditsModal open={showCreditsModal} onClose={() => setShowCreditsModal(false)} />
       <div className="space-y-10">
         <div className="flex flex-col gap-3">
           <Badge

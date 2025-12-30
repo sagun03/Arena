@@ -45,6 +45,13 @@ Server will be available at `http://localhost:8000`
 - `JWT_SECRET`: Secret for backend session JWTs (backend)
 - `JWT_EXP_MINUTES`: Session token lifetime in minutes (backend)
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed origins (backend), e.g., `http://localhost:3000`
+- `STRIPE_SECRET_KEY`: Stripe secret key (backend)
+- `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret (backend)
+- `STRIPE_SUCCESS_URL`: Stripe Checkout success redirect URL
+- `STRIPE_CANCEL_URL`: Stripe Checkout cancel redirect URL
+- `STRIPE_PRICE_STARTER`: Stripe price ID for the Starter pack (10 credits)
+- `STRIPE_PRICE_PLUS`: Stripe price ID for the Plus pack (20 credits)
+- `STRIPE_PRICE_PRO`: Stripe price ID for the Pro pack (50 credits)
 
 On the frontend, configure Firebase SDK with:
 - `REACT_APP_FIREBASE_API_KEY`

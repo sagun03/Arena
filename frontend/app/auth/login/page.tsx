@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { auth, googleProvider } from '@/lib/firebase'
 import apiClient from '@/lib/api-client'
@@ -16,6 +16,8 @@ import { ArrowRight } from '@untitledui/icons'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -37,7 +39,7 @@ export default function LoginPage() {
       localStorage.setItem('idToken', data.idToken)
       localStorage.setItem('sessionToken', data.sessionToken)
       toast.success('Login successful! Redirecting...')
-      setTimeout(() => router.push('/dashboard'), 500)
+      setTimeout(() => router.push(redirectTo), 500)
     } catch (err: any) {
       const message = buildError(err)
       setError(message)
@@ -57,7 +59,7 @@ export default function LoginPage() {
       localStorage.setItem('idToken', data.idToken)
       localStorage.setItem('sessionToken', data.sessionToken)
       toast.success('Google login successful! Redirecting...')
-      setTimeout(() => router.push('/dashboard'), 500)
+      setTimeout(() => router.push(redirectTo), 500)
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Google login failed'
       setError(message)

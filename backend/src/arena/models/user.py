@@ -15,3 +15,9 @@ class UserModel(BaseModel):
     stripeSubscriptionId: Optional[str] = None
     stripePlan: Optional[str] = None
     plan: Optional[str] = None
+    lastPackId: Optional[str] = None
+    lastPurchaseAt: Optional[Any] = None
+    lastPurchaseAmount: Optional[int] = None
+    lastPurchaseCurrency: Optional[str] = None
+    lifetimeSpend: Optional[int] = None
+    lifetimeCreditsPurchased: Optional[int] = None

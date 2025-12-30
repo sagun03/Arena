@@ -12,7 +12,13 @@ from arena.agents.customer_agent import CustomerAgent
 from arena.agents.judge_agent import JudgeAgent
 from arena.agents.market_agent import MarketAgent
 from arena.agents.skeptic_agent import SkepticAgent
-from arena.auth.firebase import get_firestore_client, verify_token
+from arena.auth.dependencies import require_auth
+from arena.auth.firebase import get_firestore_client
+from arena.billing.credits import (
+    InsufficientCreditsError,
+    consume_credits,
+    grant_credits,
+)
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.decision_evidence import DecisionEvidence
@@ -23,31 +29,12 @@ from arena.state_manager import get_debate_state, save_debate_state
 from arena.vectorstore.embeddings import embed_texts
 from arena.vectorstore.historical_store import get_historical_store
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import firestore
 from pydantic import BaseModel, Field
 
-security = HTTPBearer(auto_error=False)
-
-
-async def require_auth(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> Dict[str, Any]:
-    """Require a valid Firebase ID token from the Authorization header."""
-
-    if not credentials or not credentials.credentials:
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-
-    try:
-        decoded = await anyio.to_thread.run_sync(verify_token, credentials.credentials)
-        if not decoded.get("email_verified"):
-            raise HTTPException(status_code=403, detail="Email not verified")
-        return decoded
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
-
-
 router = APIRouter(dependencies=[Depends(require_auth)])
+
+VALIDATION_CREDIT_COST = 1
 
 
 def detect_idea_domain(
@@ -691,6 +678,13 @@ async def validate_idea(
         if not uid:
             raise HTTPException(status_code=401, detail="Missing uid in token")
 
+        try:
+            await anyio.to_thread.run_sync(consume_credits, uid, VALIDATION_CREDIT_COST)
+        except InsufficientCreditsError as exc:
+            raise HTTPException(status_code=402, detail="Insufficient credits") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
         # Generate unique debate ID
         debate_id = str(uuid.uuid4())
 
@@ -709,7 +703,10 @@ async def validate_idea(
 
         # Save initial state without blocking on LLM extraction so the request returns fast
         initial_state["idea_title"] = idea_title
-        await save_debate_state(debate_id, initial_state)
+        saved = await save_debate_state(debate_id, initial_state)
+        if not saved:
+            await anyio.to_thread.run_sync(grant_credits, uid, VALIDATION_CREDIT_COST)
+            raise HTTPException(status_code=500, detail="Failed to create debate state")
 
         # Persist a pending verdict document so clients can list active validations immediately
         now = datetime.utcnow()

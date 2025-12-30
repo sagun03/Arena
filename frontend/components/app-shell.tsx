@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/button'
 import { Logo } from '@/components/logo'
 import { useAuth } from '@/app/providers/auth-provider'
+import { useCredits } from '@/app/providers/credits-provider'
 import { cn } from '@/lib/utils'
 import {
   Home01,
@@ -30,12 +31,14 @@ const navItems = [
   { href: '/audits', label: 'My Audits', icon: Check },
   { href: '/active', label: 'Active', icon: Home01 },
   { href: '/validate', label: 'Validate Product', icon: Stars02 },
+  { href: '/pricing', label: 'Credit Packs', icon: Stars02 },
 ]
 
 export function AppShell({ children, onValidateClick }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, loading, logout } = useAuth()
+  const { credits, loading: creditsLoading } = useCredits()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -130,6 +133,24 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
           </div>
 
           <div className="mt-4 pt-4 border-t border-slate-200/70 dark:border-slate-800/70 flex flex-col gap-2">
+            {user && (
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900 px-4 py-3">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <span>Credits</span>
+                  <span className="text-slate-900 dark:text-white font-semibold tracking-normal">
+                    {creditsLoading ? '...' : (credits ?? 0)}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  onClick={() => router.push('/pricing')}
+                >
+                  Buy Credits
+                </Button>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               {!sidebarCollapsed && (
                 <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Theme</span>
@@ -201,6 +222,27 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
               <ThemeToggle />
               <AuthActions />
             </div>
+            {user && (
+              <div className="mt-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900 px-4 py-3">
+                <div className="flex items-center justify-between text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <span>Credits</span>
+                  <span className="text-slate-900 dark:text-white font-semibold tracking-normal">
+                    {creditsLoading ? '...' : (credits ?? 0)}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="mt-3 w-full"
+                  onClick={() => {
+                    setMobileOpen(false)
+                    router.push('/pricing')
+                  }}
+                >
+                  Buy Credits
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}

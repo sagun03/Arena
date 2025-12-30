@@ -99,7 +99,7 @@ async def signup(payload: SignupRequest, request: Request) -> Dict[str, Any]:
             createdAt=datetime.utcnow(),
             verified=False,
             loginProvider="email",
-            credits=0,
+            credits=2,
             stripeCustomerId=None,
             stripeSubscriptionId=None,
             stripePlan=None,
@@ -176,6 +176,7 @@ async def login(payload: LoginWithTokenRequest, request: Request) -> Dict[str, A
                 createdAt=datetime.utcnow(),
                 verified=decoded.get("email_verified", False),
                 loginProvider="email",
+                credits=2,
             )
             await anyio.to_thread.run_sync(
                 doc_ref.set,
@@ -231,6 +232,7 @@ async def google_login(payload: GoogleLoginRequest) -> Dict[str, Any]:
             createdAt=datetime.utcnow(),
             verified=True,
             loginProvider="google",
+            credits=2,
         )
         await anyio.to_thread.run_sync(
             doc_ref.set,
