@@ -121,7 +121,7 @@ export default function ActiveValidationsPage() {
         )}
 
         {!pageLoading && items.length === 0 && (
-          <Card className="max-w-2xl mx-auto shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 text-center p-12">
+          <Card className="max-w-2xl mx-auto my-auto shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 text-center p-12">
             <div className="text-5xl mb-4">⏳</div>
             <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
               No active validations

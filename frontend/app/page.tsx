@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useAuth } from './providers/auth-provider'
 import { getRecentVerdicts, startValidation } from '@/lib/arena-service'
+import { usePricingConfig } from '@/lib/use-pricing-config'
 import { Button } from '@/components/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/card'
 import { Badge } from '@/components/badge'
@@ -40,6 +41,14 @@ interface RecentVerdictItem {
 export default function Home() {
   const { user, loading, logout } = useAuth()
   const router = useRouter()
+  const { config: pricing } = usePricingConfig()
+  const packMap = useMemo(() => {
+    const map: Record<string, { price: number; credits: number }> = {}
+    pricing.packs.forEach(pack => {
+      map[pack.id] = { price: pack.price, credits: pack.credits }
+    })
+    return map
+  }, [pricing])
   const [prdText, setPrdText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successDebateId, setSuccessDebateId] = useState<string | null>(null)
@@ -330,7 +339,7 @@ export default function Home() {
             </div>
             <div className="flex items-center space-x-1">
               <CheckCircle className="w-4 h-4 text-green-500" />
-              <span>5 Free Validations</span>
+              <span>2 Free Validations</span>
             </div>
             <div className="flex items-center space-x-1">
               <CheckCircle className="w-4 h-4 text-green-500" />
@@ -704,7 +713,7 @@ export default function Home() {
 
               <div className="text-center pt-6 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  🔒 <strong>Free & Secure:</strong> No credit card required • 5 free validations •
+                  🔒 <strong>Free & Secure:</strong> No credit card required • 2 free validations •
                   Instant results
                 </p>
               </div>
@@ -1176,17 +1185,17 @@ export default function Home() {
               Simple, Transparent Pricing
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300">
-              Start free, pay only for serious validation.
+              Start free, pay only when you want deeper validation.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
               <CardHeader>
                 <CardTitle className="text-center text-gray-900 dark:text-white">Free</CardTitle>
                 <div className="text-center">
                   <span className="text-4xl font-bold text-gray-900 dark:text-white">$0</span>
-                  <span className="text-gray-500 dark:text-gray-400">/month</span>
+                  <span className="text-gray-500 dark:text-gray-400">one-time</span>
                 </div>
                 <CardDescription className="text-center text-gray-600 dark:text-gray-300">
                   Perfect for exploring ideas
@@ -1196,21 +1205,72 @@ export default function Home() {
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    5 free validations
+                    2 free validations
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    Basic verdict & score
+                    Full verdict + scorecard
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Evidence tagging</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Full debate transcript
+                  </span>
                 </div>
-                <Button variant="secondary" className="w-full mt-6">
-                  Get Started Free
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">7-day test plans</span>
+                </div>
+                <Button asChild variant="secondary" className="w-full mt-6">
+                  <Link href="/auth/signup">Get Started Free</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <CardHeader>
+                <CardTitle className="text-center text-gray-900 dark:text-white">Starter</CardTitle>
+                <div className="text-center">
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                    {pricing.currencySymbol} {packMap.starter?.price ?? 0}
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400">{pricing.currencyCode}</span>
+                </div>
+                <CardDescription className="text-center text-gray-600 dark:text-gray-300">
+                  Best for quick idea checks
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {packMap.starter?.credits ?? 10} credits
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Full verdict + scorecard
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Full debate transcript
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">7-day test plans</span>
+                </div>
+                <Button
+                  asChild
+                  className="w-full mt-6 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
+                  <Link href="/pricing">Buy Credits</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -1220,17 +1280,25 @@ export default function Home() {
                 <Badge variant="brand">Most Popular</Badge>
               </div>
               <CardHeader>
-                <CardTitle className="text-center">Pro</CardTitle>
+                <CardTitle className="text-center">Plus</CardTitle>
                 <div className="text-center">
-                  <span className="text-4xl font-bold">$29</span>
-                  <span className="text-gray-500">/month</span>
+                  <span className="text-4xl font-bold">
+                    {pricing.currencySymbol} {packMap.plus?.price ?? 0}
+                  </span>
+                  <span className="text-gray-500">{pricing.currencyCode}</span>
                 </div>
-                <CardDescription className="text-center">For serious founders</CardDescription>
+                <CardDescription className="text-center">
+                  For weekly validation sprints
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Unlimited validations</span>
+                  <span className="text-sm">{packMap.plus?.credits ?? 20} credits</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm">Full verdict + scorecard</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1240,53 +1308,53 @@ export default function Home() {
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm">7-day test plans</span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">Priority support</span>
-                </div>
-                <Button className="w-full mt-6">Start Pro Trial →</Button>
+                <Button
+                  asChild
+                  className="w-full mt-6 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
+                  <Link href="/pricing">Buy Credits</Link>
+                </Button>
               </CardContent>
             </Card>
 
             <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
               <CardHeader>
-                <CardTitle className="text-center text-gray-900 dark:text-white">
-                  Enterprise
-                </CardTitle>
+                <CardTitle className="text-center text-gray-900 dark:text-white">Pro</CardTitle>
                 <div className="text-center">
-                  <span className="text-4xl font-bold text-gray-900 dark:text-white">Custom</span>
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                    {pricing.currencySymbol} {packMap.pro?.price ?? 0}
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400">{pricing.currencyCode}</span>
                 </div>
                 <CardDescription className="text-center text-gray-600 dark:text-gray-300">
-                  For teams and organizations
+                  For heavy research cycles
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    Everything in Pro
+                    {packMap.pro?.credits ?? 50} credits
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    Team collaboration
+                    Full verdict + scorecard
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    Custom integrations
+                    Full debate transcript
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm text-gray-600 dark:text-gray-300">
-                    Dedicated support
-                  </span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">7-day test plans</span>
                 </div>
-                <Button variant="secondary" className="w-full mt-6">
-                  Contact Sales
+                <Button variant="secondary" asChild className="w-full mt-6">
+                  <Link href="/pricing">Buy Credits</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -1322,7 +1390,7 @@ export default function Home() {
             </Button>
           </div>
           <p className="text-sm mt-6 opacity-75">
-            ⚡ 5 free validations • No setup required • Cancel anytime
+            ⚡ 2 free validations • No setup required • Cancel anytime
           </p>
         </Container>
       </Section>

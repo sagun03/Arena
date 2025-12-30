@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   ArrowRight,
   LogOut01,
+  HelpCircle,
 } from '@untitledui/icons'
 
 interface AppShellProps {
@@ -151,6 +152,15 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
                 </Button>
               </div>
             )}
+            {user && (
+              <Link
+                href="/help"
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <HelpCircle className="h-4 w-4" />
+                <span>Help</span>
+              </Link>
+            )}
             <div className="flex items-center justify-between">
               {!sidebarCollapsed && (
                 <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Theme</span>
@@ -242,6 +252,16 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
                   Buy Credits
                 </Button>
               </div>
+            )}
+            {user && (
+              <Link
+                href="/help"
+                onClick={() => setMobileOpen(false)}
+                className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <HelpCircle className="h-4 w-4" />
+                <span>Help</span>
+              </Link>
             )}
           </div>
         </div>

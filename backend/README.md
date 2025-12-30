@@ -49,9 +49,12 @@ Server will be available at `http://localhost:8000`
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret (backend)
 - `STRIPE_SUCCESS_URL`: Stripe Checkout success redirect URL
 - `STRIPE_CANCEL_URL`: Stripe Checkout cancel redirect URL
-- `STRIPE_PRICE_STARTER`: Stripe price ID for the Starter pack (10 credits)
-- `STRIPE_PRICE_PLUS`: Stripe price ID for the Plus pack (20 credits)
-- `STRIPE_PRICE_PRO`: Stripe price ID for the Pro pack (50 credits)
+- `STRIPE_PRICE_STARTER_CAD`: Stripe price ID for the Starter pack in CAD (10 credits)
+- `STRIPE_PRICE_PLUS_CAD`: Stripe price ID for the Plus pack in CAD (20 credits)
+- `STRIPE_PRICE_PRO_CAD`: Stripe price ID for the Pro pack in CAD (50 credits)
+- `STRIPE_PRICE_STARTER_INR`: Stripe price ID for the Starter pack in INR (10 credits)
+- `STRIPE_PRICE_PLUS_INR`: Stripe price ID for the Plus pack in INR (20 credits)
+- `STRIPE_PRICE_PRO_INR`: Stripe price ID for the Pro pack in INR (50 credits)
 
 On the frontend, configure Firebase SDK with:
 - `REACT_APP_FIREBASE_API_KEY`

@@ -1,8 +1,10 @@
 """Stripe billing and credit purchase endpoints."""
 
+import ipaddress
 from typing import Any, Dict
 
 import anyio
+import httpx
 import stripe
 from arena.auth.dependencies import require_auth
 from arena.auth.firebase import get_firestore_client
@@ -17,6 +19,7 @@ router = APIRouter()
 
 class CheckoutSessionRequest(BaseModel):
     pack_id: str = Field(..., description="Credit pack identifier")
+    region: str | None = Field(None, description="ISO-3166 country code")
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -27,25 +30,73 @@ class CreditsResponse(BaseModel):
     credits: int = Field(..., description="Current credit balance")
 
 
-def _get_pack_config() -> Dict[str, Dict[str, Any]]:
+class RegionResponse(BaseModel):
+    country_code: str | None = Field(None, description="ISO-3166 country code")
+
+
+async def _detect_country(request: Request, fallback: str | None = None) -> str | None:
+    cf_country = request.headers.get("cf-ipcountry")
+    if cf_country and cf_country != "XX":
+        return cf_country
+
+    ip = request.client.host if request.client else None
+    if not ip:
+        return fallback
+
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        if ip_obj.is_private or ip_obj.is_loopback:
+            return fallback
+    except ValueError:
+        return fallback
+
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            resp = await client.get(f"https://ipapi.co/{ip}/json/")
+            if resp.status_code != 200:
+                return fallback
+            data = resp.json()
+            country = data.get("country")
+            return country or fallback
+    except Exception:  # noqa: BLE001
+        return fallback
+
+
+def _get_pack_config(currency: str) -> Dict[str, Dict[str, Any]]:
+    currency = currency.upper()
+    if currency == "INR":
+        return {
+            "starter": {
+                "price_id": settings.stripe_price_starter_inr,
+                "credits": 10,
+            },
+            "plus": {
+                "price_id": settings.stripe_price_plus_inr,
+                "credits": 20,
+            },
+            "pro": {
+                "price_id": settings.stripe_price_pro_inr,
+                "credits": 50,
+            },
+        }
     return {
         "starter": {
-            "price_id": settings.stripe_price_starter,
+            "price_id": settings.stripe_price_starter_cad,
             "credits": 10,
         },
         "plus": {
-            "price_id": settings.stripe_price_plus,
+            "price_id": settings.stripe_price_plus_cad,
             "credits": 20,
         },
         "pro": {
-            "price_id": settings.stripe_price_pro,
+            "price_id": settings.stripe_price_pro_cad,
             "credits": 50,
         },
     }
 
 
-def _get_pack(pack_id: str) -> Dict[str, Any]:
-    packs = _get_pack_config()
+def _get_pack(pack_id: str, currency: str) -> Dict[str, Any]:
+    packs = _get_pack_config(currency)
     pack = packs.get(pack_id)
     if not pack:
         raise HTTPException(status_code=400, detail="Unknown credit pack")
@@ -79,6 +130,7 @@ def _ensure_stripe_customer(uid: str, email: str | None) -> str:
 )
 async def create_checkout_session(
     payload: CheckoutSessionRequest,
+    request: Request,
     user: Dict[str, Any] = Depends(require_auth),
 ) -> CheckoutSessionResponse:
     uid = user.get("uid")
@@ -87,7 +139,9 @@ async def create_checkout_session(
     if not settings.stripe_secret_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
 
-    pack = _get_pack(payload.pack_id)
+    country = await _detect_country(request, payload.region)
+    currency = "INR" if country and country.upper() == "IN" else "CAD"
+    pack = _get_pack(payload.pack_id, currency)
     stripe.api_key = settings.stripe_secret_key
 
     customer_id = await anyio.to_thread.run_sync(_ensure_stripe_customer, uid, user.get("email"))
@@ -104,6 +158,7 @@ async def create_checkout_session(
                 "uid": uid,
                 "pack_id": payload.pack_id,
                 "credits": str(pack["credits"]),
+                "currency": currency,
             },
         )
     )
@@ -214,3 +269,14 @@ async def stripe_webhook(request: Request) -> Dict[str, Any]:
                 )
 
     return {"status": "ok"}
+
+
+@router.get(
+    "/region",
+    response_model=RegionResponse,
+    summary="Detect client country",
+    tags=["billing"],
+)
+async def get_region(request: Request) -> RegionResponse:
+    country = await _detect_country(request, None)
+    return RegionResponse(country_code=country)

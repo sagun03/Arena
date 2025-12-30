@@ -8,7 +8,8 @@ import { Badge } from '@/components/badge'
 import { Card, CardContent } from '@/components/card'
 import { useAuth } from '@/app/providers/auth-provider'
 import { useCredits } from '@/app/providers/credits-provider'
-import { CREDIT_PACKS, createCheckoutSession, CreditPackId } from '@/lib/billing-service'
+import { createCheckoutSession, CreditPackId } from '@/lib/billing-service'
+import { usePricingConfig } from '@/lib/use-pricing-config'
 import { toast } from 'sonner'
 
 export default function PricingPage() {
@@ -16,6 +17,8 @@ export default function PricingPage() {
   const { user } = useAuth()
   const { credits, refreshCredits } = useCredits()
   const [loadingPack, setLoadingPack] = useState<CreditPackId | null>(null)
+  const { config, region } = usePricingConfig()
+  const { packs, currencyCode, currencySymbol } = config
 
   const handlePurchase = async (packId: CreditPackId) => {
     if (!user) {
@@ -24,7 +27,7 @@ export default function PricingPage() {
     }
     try {
       setLoadingPack(packId)
-      const url = await createCheckoutSession(packId)
+      const url = await createCheckoutSession(packId, region)
       window.location.href = url
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Failed to start checkout'
@@ -60,7 +63,7 @@ export default function PricingPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {CREDIT_PACKS.map(pack => (
+          {packs.map(pack => (
             <Card key={pack.id} className="shadow-xl">
               <CardContent className="p-6 space-y-4">
                 <div className="space-y-2">
@@ -68,9 +71,11 @@ export default function PricingPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-300">{pack.description}</p>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black">${pack.price}</span>
+                  <span className="text-4xl font-black">
+                    {currencySymbol} {pack.price}
+                  </span>
                   <span className="text-xs uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                    CAD
+                    {currencyCode}
                   </span>
                   <span className="text-sm text-slate-500 dark:text-slate-400">
                     {pack.credits} credits

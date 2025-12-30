@@ -281,7 +281,7 @@ export default function DebatePage() {
                         const round = item?.round || null
                         const type = item?.type || ''
 
-                        // Color coding for agents - using darker backgrounds for light mode, lighter for dark mode
+                        // Color coding for rounds (match homepage process colors), fallback to agent colors
                         let agentColor =
                           'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
                         let agentBadge = ''
@@ -309,6 +309,18 @@ export default function DebatePage() {
                           agentColor =
                             'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
                           agentBadge = '⚙️'
+                        }
+
+                        const roundColorMap: Record<number, string> = {
+                          1: 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-700',
+                          2: 'bg-rose-50 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100 border border-rose-200 dark:border-rose-700',
+                          3: 'bg-purple-50 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-700',
+                          4: 'bg-orange-50 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-700',
+                          5: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-700',
+                        }
+
+                        if (round && roundColorMap[round]) {
+                          agentColor = roundColorMap[round]
                         }
 
                         return (
