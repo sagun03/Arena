@@ -7,13 +7,20 @@ export type LogoProps = {
   showTagline?: boolean
   /** Force a mode; defaults to auto (uses current theme). */
   mode?: 'auto' | 'light' | 'dark'
+  /** When true, render only the mark (no wordmark); useful for collapsed sidebar. */
+  markOnly?: boolean
 }
 
 /**
  * IdeaAudit logo with mark + wordmark. `showTagline` toggles the small subtitle.
  * Theme-aware: adjusts fills and strokes for light/dark backgrounds.
  */
-export function Logo({ className, showTagline = false, mode = 'auto' }: LogoProps) {
+export function Logo({
+  className,
+  showTagline = false,
+  mode = 'auto',
+  markOnly = false,
+}: LogoProps) {
   const { theme } = useTheme()
 
   const palette = useMemo(() => {
@@ -74,28 +81,32 @@ export function Logo({ className, showTagline = false, mode = 'auto' }: LogoProp
         <circle cx="60" cy="60" r="20" fill="url(#ideaAuditGradient)" filter="url(#softGlow)" />
       </g>
 
-      <text
-        x="170"
-        y="98"
-        fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial"
-        fontSize="64"
-        fontWeight="700"
-        letterSpacing="-1"
-        fill={palette.text}
-      >
-        Idea<tspan fill="url(#ideaAuditGradient)">Audit</tspan>
-      </text>
+      {!markOnly && (
+        <>
+          <text
+            x="170"
+            y="98"
+            fontFamily="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial"
+            fontSize="64"
+            fontWeight="700"
+            letterSpacing="-1"
+            fill={palette.text}
+          >
+            Idea<tspan fill="url(#ideaAuditGradient)">Audit</tspan>
+          </text>
 
-      {showTagline && (
-        <text
-          x="174"
-          y="126"
-          fontFamily="Inter, ui-sans-serif, system-ui"
-          fontSize="16"
-          fill={palette.tagline}
-        >
-          AI-powered idea validation
-        </text>
+          {showTagline && (
+            <text
+              x="174"
+              y="126"
+              fontFamily="Inter, ui-sans-serif, system-ui"
+              fontSize="16"
+              fill={palette.tagline}
+            >
+              AI-powered idea validation
+            </text>
+          )}
+        </>
       )}
     </svg>
   )

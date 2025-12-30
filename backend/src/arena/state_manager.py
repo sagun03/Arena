@@ -19,6 +19,13 @@ async def save_debate_state(debate_id: str, state_dict: Dict[str, Any]) -> bool:
     """
     try:
         _debate_states[debate_id] = state_dict
+        # Persist to Firestore
+        import anyio
+        from arena.auth.firebase import get_firestore_client
+
+        db = get_firestore_client()
+        doc_ref = db.collection("debate_states").document(debate_id)
+        await anyio.to_thread.run_sync(lambda: doc_ref.set(state_dict, merge=True))
         return True
     except Exception as e:
         print(f"Error saving debate state: {e}")
@@ -36,7 +43,21 @@ async def get_debate_state(debate_id: str) -> Optional[Dict[str, Any]]:
         State dictionary or None if not found
     """
     try:
-        return _debate_states.get(debate_id)
+        state = _debate_states.get(debate_id)
+        if state:
+            return state
+        # Try Firestore if not in memory
+        import anyio
+        from arena.auth.firebase import get_firestore_client
+
+        db = get_firestore_client()
+        doc_ref = db.collection("debate_states").document(debate_id)
+        doc = await anyio.to_thread.run_sync(lambda: doc_ref.get())
+        if doc.exists:
+            state = doc.to_dict()
+            _debate_states[debate_id] = state
+            return state
+        return None
     except Exception as e:
         print(f"Error retrieving debate state: {e}")
         return None

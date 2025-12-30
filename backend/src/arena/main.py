@@ -1,6 +1,7 @@
 """FastAPI application entry point"""
 
-from arena.routers import arena, health
+from arena.config.settings import settings
+from arena.routers import arena, auth, health
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -46,9 +47,15 @@ app = FastAPI(
 )
 
 # CORS middleware
+origins = (
+    [o.strip() for o in settings.cors_allowed_origins.split(",")]
+    if settings.cors_allowed_origins
+    else ["*"]
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +64,7 @@ app.add_middleware(
 # Include routers
 app.include_router(health.router, tags=["health"])
 app.include_router(arena.router, prefix="/arena", tags=["arena"])
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 
 @app.get("/")

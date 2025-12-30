@@ -6,11 +6,13 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+import anyio
 from arena.agents.builder_agent import BuilderAgent
 from arena.agents.customer_agent import CustomerAgent
 from arena.agents.judge_agent import JudgeAgent
 from arena.agents.market_agent import MarketAgent
 from arena.agents.skeptic_agent import SkepticAgent
+from arena.auth.firebase import get_firestore_client, verify_token
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.decision_evidence import DecisionEvidence
@@ -20,10 +22,32 @@ from arena.monitoring.metrics import logger
 from arena.state_manager import get_debate_state, save_debate_state
 from arena.vectorstore.embeddings import embed_texts
 from arena.vectorstore.historical_store import get_historical_store
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from firebase_admin import firestore
 from pydantic import BaseModel, Field
 
-router = APIRouter()
+security = HTTPBearer(auto_error=False)
+
+
+async def require_auth(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> Dict[str, Any]:
+    """Require a valid Firebase ID token from the Authorization header."""
+
+    if not credentials or not credentials.credentials:
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+
+    try:
+        decoded = await anyio.to_thread.run_sync(verify_token, credentials.credentials)
+        if not decoded.get("email_verified"):
+            raise HTTPException(status_code=403, detail="Email not verified")
+        return decoded
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from exc
+
+
+router = APIRouter(dependencies=[Depends(require_auth)])
 
 
 def detect_idea_domain(
@@ -261,6 +285,313 @@ class VerdictResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
 
+class VerdictRecord(BaseModel):
+    """Stored verdict document returned to the frontend."""
+
+    id: str
+    debate_id: str
+    status: str
+    decision: Optional[str] = None
+    idea_title: Optional[str] = None
+    confidence: Optional[float] = None
+    reasoning: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    verdict: Dict[str, Any] | None = None
+
+
+class VerdictListResponse(BaseModel):
+    """List response for verdicts."""
+
+    verdicts: list[VerdictRecord]
+
+
+class VerdictCreateRequest(BaseModel):
+    """Payload for persisting a verdict to Firestore."""
+
+    debate_id: str = Field(..., description="Debate identifier to use as document ID")
+    verdict: Verdict | Dict[str, Any] | None = Field(
+        None, description="Structured verdict payload from the debate endpoint"
+    )
+    status: str = Field(..., description="Verdict status (pending/completed/failed)")
+    idea_title: Optional[str] = Field(None, description="Optional idea title for display")
+
+
+def _serialize_timestamp(ts: Any) -> Optional[str]:
+    """Convert Firestore timestamps or datetimes into ISO strings."""
+
+    if ts is None:
+        return None
+
+    try:
+        return ts.isoformat()
+    except Exception:  # noqa: BLE001
+        try:
+            return ts.to_datetime().isoformat()
+        except Exception:  # noqa: BLE001
+            try:
+                return ts.ToDatetime().isoformat()
+            except Exception:  # noqa: BLE001
+                return str(ts)
+
+
+def _normalize_verdict_payload(
+    verdict: Verdict | Dict[str, Any] | None,
+) -> tuple[Verdict | None, Dict[str, Any] | None]:
+    """Return both a Pydantic Verdict (if parsable) and a plain dict copy."""
+
+    if verdict is None:
+        return None, None
+
+    if isinstance(verdict, Verdict):
+        return verdict, verdict.model_dump()
+
+    if isinstance(verdict, dict):
+        try:
+            verdict_model = Verdict(**verdict)
+            return verdict_model, verdict_model.model_dump()
+        except Exception:  # noqa: BLE001
+            return None, verdict
+
+    return None, None
+
+
+def _build_firestore_record(
+    *,
+    debate_id: str,
+    uid: str,
+    status: str,
+    idea_title: Optional[str],
+    verdict: Verdict | Dict[str, Any] | None,
+    created_at: datetime,
+    existing_created_at: Any | None,
+) -> Dict[str, Any]:
+    """Normalize verdict payload into the Firestore document shape."""
+
+    verdict_model, verdict_dict = _normalize_verdict_payload(verdict)
+
+    decision = None
+    confidence = None
+    reasoning = None
+    scorecard = None
+    kill_shots = None
+    assumptions = None
+    test_plan = None
+
+    if verdict_model:
+        decision = verdict_model.decision
+        confidence = verdict_model.confidence
+        reasoning = verdict_model.reasoning
+        scorecard = verdict_model.scorecard.model_dump()
+        kill_shots = [
+            {
+                "title": ks.title,
+                "description": ks.description,
+                "severity": ks.severity,
+                "agent": ks.agent,
+            }
+            for ks in verdict_model.kill_shots
+        ]
+        assumptions = verdict_model.assumptions
+        test_plan = [
+            {
+                "day": item.day,
+                "task": item.task,
+                "success_criteria": item.success_criteria,
+            }
+            for item in verdict_model.test_plan
+        ]
+    elif isinstance(verdict_dict, dict):
+        decision = verdict_dict.get("decision")
+        confidence = verdict_dict.get("confidence")
+        reasoning = verdict_dict.get("reasoning")
+        scorecard = verdict_dict.get("scorecard")
+        kill_shots = verdict_dict.get("kill_shots") or verdict_dict.get("killShots")
+        assumptions = verdict_dict.get("assumptions")
+        test_plan = verdict_dict.get("test_plan") or verdict_dict.get("testPlan")
+
+    record = {
+        "debateId": debate_id,
+        "userId": uid,
+        "ideaTitle": idea_title,
+        "status": status,
+        "decision": decision,
+        "confidence": confidence,
+        "reasoning": reasoning,
+        "scorecard": scorecard,
+        "killShots": kill_shots,
+        "assumptions": assumptions,
+        "testPlan": test_plan,
+        "verdict": verdict_dict,
+        "createdAt": existing_created_at or created_at,
+        "updatedAt": created_at,
+    }
+
+    return record
+
+
+def _extract_idea_title(prd_text: str) -> str:
+    """Derive a user-friendly idea title from PRD text."""
+
+    if not prd_text:
+        return "Untitled Idea"
+
+    lines = [line.strip(" #*\t-") for line in prd_text.splitlines() if line.strip()]
+    candidate = lines[0] if lines else prd_text.strip()
+
+    # Truncate to keep it display-friendly
+    candidate = candidate[:140].strip()
+
+    return candidate or "Untitled Idea"
+
+
+def _format_verdict_record(doc_id: str, data: Dict[str, Any]) -> VerdictRecord:
+    """Convert Firestore doc data into API response model."""
+
+    return VerdictRecord(
+        id=doc_id,
+        debate_id=data.get("debateId", doc_id),
+        status=data.get("status", "pending"),
+        decision=data.get("decision"),
+        idea_title=data.get("ideaTitle"),
+        confidence=data.get("confidence"),
+        reasoning=data.get("reasoning"),
+        created_at=_serialize_timestamp(data.get("createdAt")),
+        updated_at=_serialize_timestamp(data.get("updatedAt")),
+        verdict=data.get("verdict"),
+    )
+
+
+def _get_state_owner_id(state: Dict[str, Any]) -> Optional[str]:
+    return state.get("user_id") or state.get("userId")
+
+
+def _enforce_state_owner(state: Dict[str, Any], uid: str) -> None:
+    owner_id = _get_state_owner_id(state)
+    if not owner_id:
+        raise HTTPException(status_code=403, detail="Debate ownership missing")
+    if owner_id != uid:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@router.get(
+    "/verdicts",
+    response_model=VerdictListResponse,
+    summary="List Verdicts",
+    description="List verdicts for the authenticated user (most recent first)",
+    tags=["arena"],
+)
+async def list_verdicts(
+    limit: int
+    | None = Query(None, ge=1, le=100, description="Maximum verdicts to return (omit for all)"),
+    user: Dict[str, Any] = Depends(require_auth),
+) -> VerdictListResponse:
+    """Return recent verdicts scoped to the authenticated user."""
+
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+
+    try:
+        db = await anyio.to_thread.run_sync(get_firestore_client)
+        verdicts_ref = db.collection("verdicts")
+
+        query = verdicts_ref.where("userId", "==", uid).order_by(
+            "createdAt", direction=firestore.Query.DESCENDING
+        )
+        if limit:
+            query = query.limit(limit)
+
+        snapshots = await anyio.to_thread.run_sync(lambda: list(query.stream()))
+        verdicts = [_format_verdict_record(doc.id, doc.to_dict()) for doc in snapshots]
+        return VerdictListResponse(verdicts=verdicts)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to fetch verdicts: {exc}") from exc
+
+
+@router.get(
+    "/verdicts/{debate_id}",
+    response_model=VerdictRecord,
+    summary="Get Verdict Document",
+    description="Fetch a single verdict document if it belongs to the authenticated user.",
+    tags=["arena"],
+)
+async def get_verdict_document(
+    debate_id: str = Path(..., description="Debate identifier / verdict document ID"),
+    user: Dict[str, Any] = Depends(require_auth),
+) -> VerdictRecord:
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+
+    db = await anyio.to_thread.run_sync(get_firestore_client)
+    doc_ref = db.collection("verdicts").document(debate_id)
+    snapshot = await anyio.to_thread.run_sync(doc_ref.get)
+
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Verdict not found")
+
+    data = snapshot.to_dict() or {}
+    if data.get("userId") != uid:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return _format_verdict_record(snapshot.id, data)
+
+
+@router.post(
+    "/verdicts",
+    response_model=VerdictRecord,
+    status_code=201,
+    summary="Create Verdict",
+    description="Persist a verdict to Firestore for the authenticated user.",
+    tags=["arena"],
+)
+async def create_verdict_document(
+    payload: VerdictCreateRequest,
+    user: Dict[str, Any] = Depends(require_auth),
+) -> VerdictRecord:
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+
+    now = datetime.utcnow()
+
+    try:
+        db = await anyio.to_thread.run_sync(get_firestore_client)
+        doc_ref = db.collection("verdicts").document(payload.debate_id)
+        existing_snapshot = await anyio.to_thread.run_sync(doc_ref.get)
+        existing_data = existing_snapshot.to_dict() if existing_snapshot.exists else {}
+        existing_owner = existing_data.get("userId") if existing_data else None
+        if existing_owner and existing_owner != uid:
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        record = _build_firestore_record(
+            debate_id=payload.debate_id,
+            uid=uid,
+            status=payload.status,
+            idea_title=payload.idea_title,
+            verdict=payload.verdict,
+            created_at=now,
+            existing_created_at=(existing_data or {}).get("createdAt"),
+        )
+
+        # Preserve existing fields when payload omits them
+        if existing_data:
+            record["verdict"] = record.get("verdict") or existing_data.get("verdict")
+            record["decision"] = record.get("decision") or existing_data.get("decision")
+            record["confidence"] = record.get("confidence") or existing_data.get("confidence")
+            record["reasoning"] = record.get("reasoning") or existing_data.get("reasoning")
+            record["scorecard"] = record.get("scorecard") or existing_data.get("scorecard")
+            record["killShots"] = record.get("killShots") or existing_data.get("killShots")
+            record["assumptions"] = record.get("assumptions") or existing_data.get("assumptions")
+            record["testPlan"] = record.get("testPlan") or existing_data.get("testPlan")
+
+        await anyio.to_thread.run_sync(doc_ref.set, record, True)
+        return _format_verdict_record(doc_ref.id, record)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to store verdict: {exc}") from exc
+
+
 @router.get(
     "/graph/structure",
     summary="Graph Structure",
@@ -295,11 +626,20 @@ async def get_graph_structure() -> Dict[str, Any]:
     description="Get progress across debate graph nodes",
     tags=["arena"],
 )
-async def get_debate_graph(debate_id: str) -> Dict[str, Any]:
+async def get_debate_graph(
+    debate_id: str,
+    user: Dict[str, Any] = Depends(require_auth),
+) -> Dict[str, Any]:
     """
     Return graph progress based on current_round.
     """
-    state = await get_debate_state(debate_id) or {}
+    state = await get_debate_state(debate_id)
+    if not state:
+        raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+    _enforce_state_owner(state, uid)
     current_round = int(state.get("current_round", 0))
     round_status = state.get("round_status", state.get("status", "pending"))
 
@@ -333,7 +673,10 @@ async def get_debate_graph(debate_id: str) -> Dict[str, Any]:
     """,
     tags=["arena"],
 )
-async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationResponse:
+async def validate_idea(
+    request: IdeaValidationRequest,
+    user: Dict[str, Any] = Depends(require_auth),
+) -> IdeaValidationResponse:
     """
     Submit idea for validation.
 
@@ -344,13 +687,18 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
         IdeaValidationResponse: Response containing debate ID
     """
     try:
+        uid = user.get("uid")
+        if not uid:
+            raise HTTPException(status_code=401, detail="Missing uid in token")
+
         # Generate unique debate ID
         debate_id = str(uuid.uuid4())
 
         # Create initial debate state
-        idea_title = "Untitled Idea"
+        idea_title = _extract_idea_title(request.prd_text)
         initial_state: Dict[str, Any] = {
             "debate_id": debate_id,
+            "user_id": uid,
             "status": "pending",
             "current_round": 0,
             "round_status": "pending",
@@ -362,6 +710,23 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
         # Save initial state without blocking on LLM extraction so the request returns fast
         initial_state["idea_title"] = idea_title
         await save_debate_state(debate_id, initial_state)
+
+        # Persist a pending verdict document so clients can list active validations immediately
+        now = datetime.utcnow()
+        db = await anyio.to_thread.run_sync(get_firestore_client)
+        doc_ref = db.collection("verdicts").document(debate_id)
+        existing_snapshot = await anyio.to_thread.run_sync(doc_ref.get)
+        existing_data = existing_snapshot.to_dict() if existing_snapshot.exists else {}
+        record = _build_firestore_record(
+            debate_id=debate_id,
+            uid=uid,
+            status="pending",
+            idea_title=existing_data.get("ideaTitle") or idea_title,
+            verdict=existing_data.get("verdict"),
+            created_at=now,
+            existing_created_at=existing_data.get("createdAt"),
+        )
+        await anyio.to_thread.run_sync(lambda: doc_ref.set(record, merge=True))
 
         # Start background debate execution (non-blocking)
         asyncio.create_task(execute_debate(debate_id, request.prd_text))
@@ -383,7 +748,8 @@ async def validate_idea(request: IdeaValidationRequest) -> IdeaValidationRespons
     tags=["arena"],
 )
 async def get_debate(
-    debate_id: str = Path(..., description="Unique debate identifier")
+    debate_id: str = Path(..., description="Unique debate identifier"),
+    user: Dict[str, Any] = Depends(require_auth),
 ) -> DebateResponse:
     """
     Get debate state.
@@ -401,6 +767,10 @@ async def get_debate(
 
     if not state_dict:
         raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+    _enforce_state_owner(state_dict, uid)
 
     # Transform raw transcript into chat-like format
     raw_transcript = state_dict.get("transcript", [])
@@ -560,7 +930,8 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
     tags=["arena"],
 )
 async def get_verdict(
-    debate_id: str = Path(..., description="Unique debate identifier")
+    debate_id: str = Path(..., description="Unique debate identifier"),
+    user: Dict[str, Any] = Depends(require_auth),
 ) -> VerdictResponse:
     """
     Get final verdict.
@@ -578,6 +949,10 @@ async def get_verdict(
 
     if not state_dict:
         raise HTTPException(status_code=404, detail=f"Debate {debate_id} not found")
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+    _enforce_state_owner(state_dict, uid)
 
     status = state_dict.get("status", state_dict.get("round_status", "pending"))
     verdict_dict = state_dict.get("verdict")

@@ -77,8 +77,8 @@ echo ""
 
 # Start the server using uv
 if command -v uv &> /dev/null; then
-    uv run uvicorn src.arena.main:app --host "$HOST" --port "$PORT" $RELOAD
+    uv run uvicorn arena.main:app --host "$HOST" --port "$PORT" $RELOAD
 else
     echo -e "${YELLOW}⚠️  uv not found, trying python -m uvicorn...${NC}"
-    python -m uvicorn src.arena.main:app --host "$HOST" --port "$PORT" $RELOAD
+    python -m uvicorn arena.main:app --host "$HOST" --port "$PORT" $RELOAD
 fi

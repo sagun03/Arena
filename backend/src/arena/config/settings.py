@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
+    # Firebase / Firestore
+    firebase_service_account_path: str = "service-account-dev.json"
+    firebase_project_id: str | None = None
+
+    # Backend Auth (JWT)
+    jwt_secret: str | None = None
+    jwt_exp_minutes: int = 60
+
+    # CORS
+    cors_allowed_origins: str = (
+        "*"  # comma-separated list, e.g., "http://localhost:3000,https://app.example.com"
+    )
+
     class Config:
         env_file = ".env"
         case_sensitive = False

@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import { Toaster } from 'sonner'
 import { RouteProvider } from './providers/route-provider'
 import { ThemeProvider } from './providers/theme-provider'
+import { AuthProvider } from './providers/auth-provider'
 import './globals.css'
 
 const inter = Inter({
@@ -31,7 +33,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
       >
         <RouteProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <Toaster richColors position="bottom-center" />
+              {children}
+            </AuthProvider>
+          </ThemeProvider>
         </RouteProvider>
       </body>
     </html>

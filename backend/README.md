@@ -21,7 +21,7 @@ uv sync
 2. Copy environment variables:
 ```bash
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your secrets and origins
 ```
 
 3. Run the server:
@@ -30,13 +30,38 @@ cp .env.example .env
 ./start.sh
 
 # Option 2: Use uv directly
-uv run uvicorn src.arena.main:app --reload
+uv run uvicorn arena.main:app --reload
 
 # Option 3: Custom host/port
 ./start.sh --host 0.0.0.0 --port 8000
 ```
 
 Server will be available at `http://localhost:8000`
+
+### Environment Variables
+
+- `FIREBASE_SERVICE_ACCOUNT_PATH`: Path to Firebase service account JSON (backend only)
+- `FIREBASE_PROJECT_ID`: Optional project override (backend)
+- `JWT_SECRET`: Secret for backend session JWTs (backend)
+- `JWT_EXP_MINUTES`: Session token lifetime in minutes (backend)
+- `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed origins (backend), e.g., `http://localhost:3000`
+
+On the frontend, configure Firebase SDK with:
+- `REACT_APP_FIREBASE_API_KEY`
+- `REACT_APP_FIREBASE_AUTH_DOMAIN`
+- `REACT_APP_FIREBASE_PROJECT_ID`
+- `REACT_APP_FIREBASE_STORAGE_BUCKET`
+- `REACT_APP_FIREBASE_MESSAGING_SENDER_ID`
+- `REACT_APP_FIREBASE_APP_ID`
+- `REACT_APP_RECAPTCHA_V3_SITE_KEY` (App Check)
+- `REACT_APP_APPCHECK_DEBUG_TOKEN` (optional for local dev)
+
+### Auth Flow
+
+- Frontend performs login/sign-up (email/password or Google) using Firebase JS SDK.
+- Frontend sends Firebase `idToken` to backend `/auth/login` (or `/auth/google`).
+- Backend verifies the token via Firebase Admin SDK, upserts a Firestore user, and returns a short-lived `sessionToken`.
+- Protected endpoints require authentication via tokens.
 
 **API Documentation:**
 - Swagger UI: http://localhost:8000/docs

@@ -1,6 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { useAuth } from './providers/auth-provider'
+import { getRecentVerdicts, startValidation } from '@/lib/arena-service'
 import { Button } from '@/components/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/card'
 import { Badge } from '@/components/badge'
@@ -20,15 +25,62 @@ import {
   PlayCircle,
 } from '@untitledui/icons'
 
+const PRD_STORAGE_KEY = 'ideaaudit_pending_prd'
+
+interface RecentVerdictItem {
+  id: string
+  ideaTitle?: string | null
+  decision?: string
+  status: string
+  createdAt?: string | null
+  confidence?: number
+  reasoning?: string
+}
+
 export default function Home() {
+  const { user, loading, logout } = useAuth()
+  const router = useRouter()
   const [prdText, setPrdText] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successDebateId, setSuccessDebateId] = useState<string | null>(null)
   const [successIdeaTitle, setSuccessIdeaTitle] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [recentVerdicts, setRecentVerdicts] = useState<RecentVerdictItem[]>([])
+  const [loadingAudits, setLoadingAudits] = useState(false)
   const rotatingWords = ['Bad Ideas', 'Weak Concepts', 'Shaky Pitches', 'Dead-End Plans']
   const [wordIndex, setWordIndex] = useState(0)
+
+  // Restore PRD text from session storage after login
+  useEffect(() => {
+    if (!loading && user) {
+      const pendingPrd = sessionStorage.getItem(PRD_STORAGE_KEY)
+      if (pendingPrd) {
+        setPrdText(pendingPrd)
+        sessionStorage.removeItem(PRD_STORAGE_KEY)
+        toast.success('Your PRD has been restored. Ready to validate!')
+        // Scroll to the validation section
+        setTimeout(() => {
+          const validateSection = document.getElementById('validate-now')
+          validateSection?.scrollIntoView({ behavior: 'smooth' })
+        }, 500)
+      }
+    }
+  }, [user, loading])
+
+  // Fetch recent audits for logged-in users
+  useEffect(() => {
+    if (!loading && user) {
+      setLoadingAudits(true)
+      getRecentVerdicts(3)
+        .then(setRecentVerdicts)
+        .catch(err => {
+          console.error('Failed to load recent audits:', err)
+        })
+        .finally(() => {
+          setLoadingAudits(false)
+        })
+    }
+  }, [user, loading])
 
   // Debounce PRD input for smoother UX on large text
   const debouncedPrd = useMemo(() => prdText, [prdText])
@@ -47,28 +99,30 @@ export default function Home() {
   }, [rotatingWords.length])
 
   async function handleValidate() {
+    // Check if user is logged in
+    if (!user) {
+      // Store PRD text in session storage before redirecting
+      if (prdText.trim()) {
+        sessionStorage.setItem(PRD_STORAGE_KEY, prdText)
+      }
+      toast.info('Please log in to validate your idea')
+      router.push('/auth/login')
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage(null)
     setSuccessDebateId(null)
     setSuccessIdeaTitle(null)
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
-      const res = await fetch(`${apiUrl}/arena/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prd_text: prdText.trim() }),
-      })
-      if (!res.ok) {
-        const detail = await res.text()
-        throw new Error(detail || `Request failed: ${res.status}`)
-      }
-      const data = await res.json()
+      const data = await startValidation(prdText)
       setSuccessDebateId(data.debate_id ?? null)
       setSuccessIdeaTitle(data.idea_title ?? null)
-      setToast({ type: 'success', message: 'Validation started. Redirect buttons enabled.' })
+      toast.success('Validation started. Redirect buttons enabled.')
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to validate idea')
-      setToast({ type: 'error', message: err?.message || 'Failed to validate idea' })
+      const message = err?.response?.data?.detail || err?.message || 'Failed to validate idea'
+      setErrorMessage(message)
+      toast.error(message)
     } finally {
       setIsSubmitting(false)
     }
@@ -76,7 +130,7 @@ export default function Home() {
 
   const handleCopySample = () => {
     navigator.clipboard.writeText(JSON.stringify(sampleVerdict, null, 2))
-    setToast({ type: 'success', message: 'Sample report copied to clipboard' })
+    toast.success('Sample report copied to clipboard')
   }
 
   const handleDownloadJson = () => {
@@ -93,16 +147,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-slate-50 dark:from-gray-900 dark:to-slate-900 text-gray-900 dark:text-white transition-colors duration-300">
-      {/* Toast */}
-      {toast && (
-        <div
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-xl px-4 py-2 shadow-lg border ${toast.type === 'success' ? 'bg-green-600 text-white border-green-500' : 'bg-red-600 text-white border-red-500'}`}
-        >
-          {toast.message}
-        </div>
-      )}
-      {/* Auto-dismiss toast */}
-      <ToastAutoDismiss toast={toast} onClear={() => setToast(null)} />
       {/* Navigation */}
       <nav className="fixed top-0 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 z-50">
         <Container className="flex items-center justify-between py-4">
@@ -157,49 +201,50 @@ export default function Home() {
             >
               Pricing
             </a>
-            <a
-              href="#testimonials"
-              className="group flex items-center text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
-            >
-              Resources
-              <svg
-                className="ml-1 w-4 h-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {user && (
+              <a
+                href="/dashboard"
+                className="text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </a>
-            <a
-              href="#about"
-              className="text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
-            >
-              About
-            </a>
+                Dashboard
+              </a>
+            )}
+            {user && (
+              <a
+                href="/audits"
+                className="text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                My Audits
+              </a>
+            )}
           </div>
 
           {/* Action Buttons */}
           <div className="hidden lg:flex items-center space-x-4">
             <ThemeToggle />
-            <Button
-              variant="secondary"
-              size="sm"
-              className="px-4 py-2 text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg"
-            >
-              Log in
-            </Button>
-            <Button
-              size="sm"
-              className="px-4 py-2 text-sm font-medium bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white border-0 shadow-sm hover:shadow-md rounded-lg"
-            >
-              Sign up
-            </Button>
+            {loading ? (
+              <div className="px-4 py-2 text-sm text-slate-500">Loading...</div>
+            ) : user ? (
+              <>
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {user.displayName || user.email}
+                  </span>
+                  <Button onClick={logout} variant="secondary" size="sm" className="px-4 py-2">
+                    Sign Out
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <Button asChild variant="secondary" size="sm" className="px-4 py-2">
+                  <Link href="/auth/login">Sign In</Link>
+                </Button>
+                <Button asChild size="sm" className="px-4 py-2">
+                  <Link href="/auth/signup">Sign Up</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -663,6 +708,112 @@ export default function Home() {
           </Card>
         </Container>
       </Section>
+
+      {/* Recent Audits Section - Only for logged-in users */}
+      {user && (
+        <Section className="bg-gradient-to-b from-blue-50 via-white to-slate-50 dark:from-gray-800 dark:via-gray-900 dark:to-slate-900 py-20">
+          <Container size="lg">
+            <div className="text-center mb-12">
+              <Badge
+                variant="secondary"
+                className="mb-6 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900/40 dark:to-purple-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 px-4 py-2 shadow-sm"
+              >
+                <span className="text-lg">📋</span> Your Recent Audits
+              </Badge>
+              <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+                Recent Validations
+              </h2>
+              <p className="text-xl text-gray-600 dark:text-gray-300">
+                Your latest PRD audit verdicts at a glance
+              </p>
+            </div>
+
+            {loadingAudits ? (
+              <div className="text-center py-12">
+                <p className="text-gray-600 dark:text-gray-300">Loading your audits...</p>
+              </div>
+            ) : recentVerdicts.length === 0 ? (
+              <Card className="max-w-2xl mx-auto shadow-lg bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 text-center p-12">
+                <div className="text-5xl mb-4">🚀</div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                  No Audits Yet
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Start validating your first PRD idea above to see it here!
+                </p>
+              </Card>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                  {recentVerdicts.map(verdict => {
+                    const decisionLower = (verdict.decision || '').toLowerCase()
+                    let badgeVariant: any = 'secondary'
+                    if (decisionLower === 'proceed') badgeVariant = 'success'
+                    else if (decisionLower === 'pivot') badgeVariant = 'warning'
+                    else if (decisionLower === 'kill') badgeVariant = 'destructive'
+
+                    return (
+                      <Link key={verdict.id} href={`/verdict/${verdict.id}`}>
+                        <Card className="shadow-lg hover:shadow-2xl hover:-translate-y-1 transition-all bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 overflow-hidden group cursor-pointer h-full">
+                          <CardHeader>
+                            <div className="flex items-start justify-between mb-2">
+                              <Badge variant={badgeVariant}>
+                                {(verdict.decision || 'Unknown').charAt(0).toUpperCase() +
+                                  (verdict.decision || 'Unknown').slice(1)}
+                              </Badge>
+                              {verdict.confidence && (
+                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                                  {Math.round(verdict.confidence)}%
+                                </span>
+                              )}
+                            </div>
+                            <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {verdict.ideaTitle || 'Untitled Idea'}
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                              {verdict.createdAt
+                                ? new Date(verdict.createdAt).toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })
+                                : 'Date unknown'}
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {verdict.reasoning && (
+                              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-3">
+                                {verdict.reasoning}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                                {verdict.id.slice(0, 8)}...
+                              </span>
+                              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    )
+                  })}
+                </div>
+                <div className="text-center">
+                  <Link href="/audits">
+                    <Button
+                      size="lg"
+                      className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]"
+                    >
+                      View All Audits
+                      <ArrowRight className="ml-2 w-5 h-5" />
+                    </Button>
+                  </Link>
+                </div>
+              </>
+            )}
+          </Container>
+        </Section>
+      )}
 
       {/* Sample Output */}
       <Section
