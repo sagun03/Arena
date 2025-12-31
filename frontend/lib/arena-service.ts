@@ -25,6 +25,8 @@ export interface DebateState {
   debate_id: string
   status: string
   transcript: Array<any>
+  current_round?: number
+  last_updated?: string | null
   error?: string | null
   idea_title?: string
 }

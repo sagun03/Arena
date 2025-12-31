@@ -16,7 +16,7 @@ type DebateState = {
   status: string
   transcript: Array<any>
   current_round?: number
-  last_updated?: string
+  last_updated?: string | null
   error?: string | null
   idea_title?: string
 }
@@ -202,7 +202,7 @@ export default function DebatePage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={fetchState}
+                  onClick={() => fetchState()}
                   className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
                 >
                   Refresh

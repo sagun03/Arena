@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
@@ -15,7 +15,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowRight } from '@untitledui/icons'
 import { useCredits } from '@/app/providers/credits-provider'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') || '/dashboard'
@@ -211,5 +211,13 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white dark:bg-gray-900" />}>
+      <LoginForm />
+    </Suspense>
   )
 }
