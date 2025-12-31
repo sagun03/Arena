@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app'
+import { getApps, initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 // import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 
@@ -11,8 +11,10 @@ const firebaseConfig = {
   appId: process.env.REACT_APP_FIREBASE_APP_ID as string,
 }
 
-const app = initializeApp(firebaseConfig)
-export const auth = getAuth(app)
+const shouldInit = typeof window !== 'undefined' && Boolean(firebaseConfig.apiKey)
+const app = shouldInit ? (getApps().length ? getApps()[0] : initializeApp(firebaseConfig)) : null
+
+export const auth = app ? getAuth(app) : (null as unknown as ReturnType<typeof getAuth>)
 export const googleProvider = new GoogleAuthProvider()
 
 // App Check (Recaptcha v3) disabled for faster Firebase initialization
