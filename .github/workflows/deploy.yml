@@ -24,6 +24,9 @@ jobs:
       image_tag: ${{ steps.resolve.outputs.image_tag }}
       backend_image: ${{ steps.resolve.outputs.backend_image }}
       frontend_image: ${{ steps.resolve.outputs.frontend_image }}
+      gcp_project_id: ${{ steps.resolve.outputs.gcp_project_id }}
+      gar_region: ${{ steps.resolve.outputs.gar_region }}
+      gar_repo: ${{ steps.resolve.outputs.gar_repo }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,25 +44,37 @@ jobs:
             IMAGE_TAG="prod"
             SHOW_DEBUG="false"
             API_URL="${{ secrets.NEXT_PUBLIC_API_URL_PROD }}"
+            GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID_PROD }}"
+            GAR_REGION="${{ secrets.GAR_REGION_PROD }}"
+            GAR_REPO="${{ secrets.GAR_REPO_PROD }}"
+            GCP_SA_KEY='${{ secrets.GCP_SA_KEY_PROD }}'
           else
             IMAGE_TAG="dev"
             SHOW_DEBUG="true"
             API_URL="${{ secrets.NEXT_PUBLIC_API_URL_DEV }}"
+            GCP_PROJECT_ID="${{ secrets.GCP_PROJECT_ID_DEV }}"
+            GAR_REGION="${{ secrets.GAR_REGION_DEV }}"
+            GAR_REPO="${{ secrets.GAR_REPO_DEV }}"
+            GCP_SA_KEY='${{ secrets.GCP_SA_KEY_DEV }}'
           fi
           echo "deploy_env=$DEPLOY_ENV" >> "$GITHUB_OUTPUT"
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "NEXT_PUBLIC_API_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SHOW_DEBUG=$SHOW_DEBUG" >> "$GITHUB_ENV"
-          echo "backend_image=${{ secrets.GAR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPO }}/ideaaudit-backend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "frontend_image=${{ secrets.GAR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPO }}/ideaaudit-frontend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "gcp_project_id=$GCP_PROJECT_ID" >> "$GITHUB_OUTPUT"
+          echo "gar_region=$GAR_REGION" >> "$GITHUB_OUTPUT"
+          echo "gar_repo=$GAR_REPO" >> "$GITHUB_OUTPUT"
+          echo "GCP_SA_KEY=$GCP_SA_KEY" >> "$GITHUB_ENV"
+          echo "backend_image=${GAR_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPO}/ideaaudit-backend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${GAR_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GAR_REPO}/ideaaudit-frontend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ env.GCP_SA_KEY }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker auth for Artifact Registry
-        run: gcloud auth configure-docker ${{ secrets.GAR_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker ${{ steps.resolve.outputs.gar_region }}-docker.pkg.dev
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build and push backend
@@ -95,15 +110,15 @@ jobs:
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_DEV }}" \
             --image "${{ needs.build_and_push.outputs.backend_image }}" \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION_DEV }}" \
+            --project "${{ secrets.GCP_PROJECT_ID_DEV }}" \
             --allow-unauthenticated
       - name: Deploy frontend (dev)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_DEV }}" \
             --image "${{ needs.build_and_push.outputs.frontend_image }}" \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION_DEV }}" \
+            --project "${{ secrets.GCP_PROJECT_ID_DEV }}" \
             --allow-unauthenticated
 
   deploy_prod:
@@ -121,13 +136,13 @@ jobs:
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_PROD }}" \
             --image "${{ needs.build_and_push.outputs.backend_image }}" \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION_PROD }}" \
+            --project "${{ secrets.GCP_PROJECT_ID_PROD }}" \
             --allow-unauthenticated
       - name: Deploy frontend (prod)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_PROD }}" \
             --image "${{ needs.build_and_push.outputs.frontend_image }}" \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region "${{ secrets.GCP_REGION_PROD }}" \
+            --project "${{ secrets.GCP_PROJECT_ID_PROD }}" \
             --allow-unauthenticated

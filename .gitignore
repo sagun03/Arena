@@ -70,3 +70,8 @@ Thumbs.db
 .cache/
 backend/uv.lock
 frontend/package-lock.json
+.env
+.env.local
+.env.*.local
+sa-dev.json
+sa-prod.json
