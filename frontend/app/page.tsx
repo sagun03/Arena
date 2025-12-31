@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { useAuth } from './providers/auth-provider'
 import { getRecentVerdicts, startValidation } from '@/lib/arena-service'
-import { usePricingConfig } from '@/lib/use-pricing-config'
+import { getPricingConfig } from '@/lib/billing-service'
 import { Button } from '@/components/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/card'
 import { Badge } from '@/components/badge'
@@ -41,7 +41,7 @@ interface RecentVerdictItem {
 export default function Home() {
   const { user, loading, logout } = useAuth()
   const router = useRouter()
-  const { config: pricing } = usePricingConfig()
+  const pricing = useMemo(() => getPricingConfig(), [])
   const packMap = useMemo(() => {
     const map: Record<string, { price: number; credits: number }> = {}
     pricing.packs.forEach(pack => {
@@ -713,8 +713,8 @@ export default function Home() {
 
               <div className="text-center pt-6 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  🔒 <strong>Free & Secure:</strong> No credit card required • 2 free validations •
-                  Instant results
+                  🔒 <strong>Free & Secure:</strong> No credit card required • 5 free credits (2
+                  validations) • Instant results
                 </p>
               </div>
             </CardContent>
@@ -1189,8 +1189,8 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
-            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-6 max-w-6xl mx-auto">
+            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 xl:col-span-2">
               <CardHeader>
                 <CardTitle className="text-center text-gray-900 dark:text-white">Free</CardTitle>
                 <div className="text-center">
@@ -1205,7 +1205,7 @@ export default function Home() {
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    2 free validations
+                    5 free credits (2 validations)
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1230,7 +1230,7 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 xl:col-span-2">
               <CardHeader>
                 <CardTitle className="text-center text-gray-900 dark:text-white">Starter</CardTitle>
                 <div className="text-center">
@@ -1275,26 +1275,26 @@ export default function Home() {
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-purple-500 relative">
+            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 relative xl:col-span-2">
               <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <Badge variant="brand">Most Popular</Badge>
+                <Badge variant="brand">Monthly</Badge>
               </div>
               <CardHeader>
-                <CardTitle className="text-center">Plus</CardTitle>
+                <CardTitle className="text-center">Pro</CardTitle>
                 <div className="text-center">
                   <span className="text-4xl font-bold">
-                    {pricing.currencySymbol} {packMap.plus?.price ?? 0}
+                    {pricing.currencySymbol} {packMap.pro_monthly?.price ?? 0}
                   </span>
                   <span className="text-gray-500">{pricing.currencyCode}</span>
                 </div>
                 <CardDescription className="text-center">
-                  For weekly validation sprints
+                  Monthly credits for steady validation
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-sm">{packMap.plus?.credits ?? 20} credits</span>
+                  <span className="text-sm">{packMap.pro_monthly?.credits ?? 50} credits</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
@@ -1312,29 +1312,77 @@ export default function Home() {
                   asChild
                   className="w-full mt-6 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
                 >
-                  <Link href="/pricing">Buy Credits</Link>
+                  <Link href="/pricing">Subscribe</Link>
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+            <Card className="border-2 border-purple-500 relative xl:col-span-3">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <Badge variant="brand">Most Popular</Badge>
+              </div>
               <CardHeader>
-                <CardTitle className="text-center text-gray-900 dark:text-white">Pro</CardTitle>
+                <CardTitle className="text-center text-gray-900 dark:text-white">Growth</CardTitle>
                 <div className="text-center">
                   <span className="text-4xl font-bold text-gray-900 dark:text-white">
-                    {pricing.currencySymbol} {packMap.pro?.price ?? 0}
+                    {pricing.currencySymbol} {packMap.growth_monthly?.price ?? 0}
                   </span>
                   <span className="text-gray-500 dark:text-gray-400">{pricing.currencyCode}</span>
                 </div>
                 <CardDescription className="text-center text-gray-600 dark:text-gray-300">
-                  For heavy research cycles
+                  Built for weekly launches
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    {packMap.pro?.credits ?? 50} credits
+                    {packMap.growth_monthly?.credits ?? 100} credits
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Full verdict + scorecard
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    Full debate transcript
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">7-day test plans</span>
+                </div>
+                <Button
+                  asChild
+                  className="w-full mt-6 bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
+                  <Link href="/pricing">Subscribe</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 xl:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-center text-gray-900 dark:text-white">Scale</CardTitle>
+                <div className="text-center">
+                  <span className="text-4xl font-bold text-gray-900 dark:text-white">
+                    {pricing.currencySymbol} {packMap.scale_monthly?.price ?? 0}
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400">{pricing.currencyCode}</span>
+                </div>
+                <CardDescription className="text-center text-gray-600 dark:text-gray-300">
+                  For teams running heavy cycles
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
+                    {packMap.scale_monthly?.credits ?? 250} credits
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -1354,7 +1402,7 @@ export default function Home() {
                   <span className="text-sm text-gray-600 dark:text-gray-300">7-day test plans</span>
                 </div>
                 <Button variant="secondary" asChild className="w-full mt-6">
-                  <Link href="/pricing">Buy Credits</Link>
+                  <Link href="/pricing">Subscribe</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -1390,7 +1438,7 @@ export default function Home() {
             </Button>
           </div>
           <p className="text-sm mt-6 opacity-75">
-            ⚡ 2 free validations • No setup required • Cancel anytime
+            ⚡ 5 free credits (2 validations) • No setup required • Cancel anytime
           </p>
         </Container>
       </Section>

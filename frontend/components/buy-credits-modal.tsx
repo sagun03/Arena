@@ -19,7 +19,7 @@ export function BuyCreditsModal({ open, onClose }: BuyCreditsModalProps) {
       <div className="relative w-full max-w-md rounded-3xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900 p-6 shadow-2xl">
         <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Out of credits</h2>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          You have 0 credits left. Purchase a credit pack to start a new validation.
+          You have 0 credits left. Each validation costs 2 credits.
         </p>
         <div className="mt-6 flex flex-col gap-3">
           <Button

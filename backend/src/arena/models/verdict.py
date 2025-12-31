@@ -85,7 +85,10 @@ class Verdict(BaseModel):
     assumptions: List[str] = Field(..., description="List of key assumptions that need validation")
     recommendations: List[str] = Field(
         default_factory=list,
-        description="Actionable recommendations for founder (e.g., 'Validate unit economics', 'Partner with distribution channels')",
+        description=(
+            "Actionable recommendations for founder (e.g., 'Validate unit economics', "
+            "'Partner with distribution channels')"
+        ),
     )
     test_plan: List[TestPlanItem] = Field(
         ..., max_length=7, description="7-day validation test plan"

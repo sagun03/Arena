@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Logo } from '@/components/logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowRight } from '@untitledui/icons'
+import { useCredits } from '@/app/providers/credits-provider'
+import apiClient from '@/lib/api-client'
 import {
   createUserWithEmailAndPassword,
   sendEmailVerification,
@@ -19,6 +21,7 @@ import {
 
 export default function SignupPage() {
   const router = useRouter()
+  const { setCredits } = useCredits()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -74,7 +77,14 @@ export default function SignupPage() {
     setLoading(true)
     setError(null)
     try {
-      await signInWithPopup(auth, googleProvider)
+      const result = await signInWithPopup(auth, googleProvider)
+      const idToken = await result.user.getIdToken()
+      const { data } = await apiClient.post('/auth/google', { idToken })
+      localStorage.setItem('idToken', data.idToken)
+      localStorage.setItem('sessionToken', data.sessionToken)
+      if (typeof data?.profile?.credits === 'number') {
+        setCredits(data.profile.credits)
+      }
       setToast({ type: 'success', message: 'Google signup successful! Redirecting...' })
       setTimeout(() => router.push('/'), 500)
     } catch (err: any) {
@@ -214,7 +224,11 @@ export default function SignupPage() {
             </div>
 
             {/* Google OAuth */}
-            <Button onClick={onGoogle} variant="secondary" disabled={loading} className="w-full">
+            <Button
+              onClick={onGoogle}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+            >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"

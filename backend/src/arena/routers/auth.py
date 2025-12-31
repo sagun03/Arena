@@ -49,6 +49,41 @@ def _rate_limit(request: Request) -> None:
     _attempts[ip].append(now)
 
 
+async def _ensure_user_doc(decoded: Dict[str, Any], login_provider: str) -> Dict[str, Any]:
+    uid = decoded.get("uid")
+    email = decoded.get("email")
+    if not uid or not email:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    db = await anyio.to_thread.run_sync(get_firestore_client)
+    doc_ref = db.collection("users").document(uid)
+    doc = await anyio.to_thread.run_sync(doc_ref.get)
+
+    if not doc.exists:
+        from datetime import datetime
+
+        user_model = UserModel(
+            uid=uid,
+            name=decoded.get("name") or email.split("@")[0],
+            email=email.lower(),
+            createdAt=datetime.utcnow(),
+            verified=decoded.get("email_verified", False),
+            loginProvider=login_provider,
+            credits=5,
+        )
+        await anyio.to_thread.run_sync(
+            doc_ref.set,
+            user_model.dict(),
+        )
+        return user_model.dict()
+
+    data = doc.to_dict() or {}
+    if decoded.get("email_verified") and not data.get("verified"):
+        await anyio.to_thread.run_sync(doc_ref.update, {"verified": True})
+        data["verified"] = True
+    return data
+
+
 class SignupRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
@@ -99,7 +134,7 @@ async def signup(payload: SignupRequest, request: Request) -> Dict[str, Any]:
             createdAt=datetime.utcnow(),
             verified=False,
             loginProvider="email",
-            credits=2,
+            credits=5,
             stripeCustomerId=None,
             stripeSubscriptionId=None,
             stripePlan=None,
@@ -159,42 +194,14 @@ async def login(payload: LoginWithTokenRequest, request: Request) -> Dict[str, A
                 ),
             )
 
-        # Ensure Firestore user exists
-        db = await anyio.to_thread.run_sync(get_firestore_client)
-        doc_ref = db.collection("users").document(uid)
-        doc = await anyio.to_thread.run_sync(doc_ref.get)
-
-        if not doc.exists:
-            from datetime import datetime
-
-            print(f"[AUTH] Creating Firestore user for {email} (UID: {uid})")
-
-            user_model = UserModel(
-                uid=uid,
-                name=decoded.get("name") or email.split("@")[0],
-                email=email.lower(),
-                createdAt=datetime.utcnow(),
-                verified=decoded.get("email_verified", False),
-                loginProvider="email",
-                credits=2,
-            )
-            await anyio.to_thread.run_sync(
-                doc_ref.set,
-                user_model.dict(),
-            )
-            print(f"[AUTH] Firestore user created successfully for {email}")
-        else:
-            print(f"[AUTH] Firestore user already exists for {email}")
-            # Update verified status
-            if decoded.get("email_verified"):
-                await anyio.to_thread.run_sync(doc_ref.update, {"verified": True})
-                print(f"[AUTH] Updated verified status to True for {email}")
+        profile = await _ensure_user_doc(decoded, "email")
 
         session_token = create_session_token(uid, email)
         return {
             "idToken": payload.id_token,
             "sessionToken": session_token,
             "user": {"uid": uid, "email": email},
+            "profile": profile,
         }
 
     except Exception as e:
@@ -219,31 +226,14 @@ async def google_login(payload: GoogleLoginRequest) -> Dict[str, Any]:
     if not uid or not email:
         raise HTTPException(status_code=400, detail="Missing uid/email in token")
 
-    db = await anyio.to_thread.run_sync(get_firestore_client)
-    doc_ref = db.collection("users").document(uid)
-    doc = await anyio.to_thread.run_sync(doc_ref.get)
-    if not doc.exists:
-        from datetime import datetime
-
-        user_model = UserModel(
-            uid=uid,
-            name=name,
-            email=email.lower(),
-            createdAt=datetime.utcnow(),
-            verified=True,
-            loginProvider="google",
-            credits=2,
-        )
-        await anyio.to_thread.run_sync(
-            doc_ref.set,
-            user_model.dict(),
-        )
+    profile = await _ensure_user_doc(decoded, "google")
 
     session_token = create_session_token(uid, email)
     return {
         "idToken": payload.id_token,
         "sessionToken": session_token,
         "user": {"uid": uid, "email": email, "name": name},
+        "profile": profile,
     }
 
 

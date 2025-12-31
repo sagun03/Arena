@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
 import { AppShell } from '@/components/app-shell'
-import { getDebateState, getDebateVerdict, saveVerdict } from '@/lib/arena-service'
+import { getDebateState, getDebateVerdict, getVerdictById, saveVerdict } from '@/lib/arena-service'
 import { useAuth } from '../../providers/auth-provider'
 
 type VerdictResponse = {
@@ -15,6 +15,9 @@ type VerdictResponse = {
   verdict: Verdict | null
   status: string
   message: string
+  idea_title?: string | null
+  started_at?: string | null
+  last_updated?: string | null
 }
 
 type Scorecard = Record<string, number | undefined>
@@ -53,9 +56,20 @@ function normalizeKey(value: string) {
   return value.trim().toLowerCase()
 }
 
+function isMissingTitle(value?: string | null) {
+  return !value || value.trim().length === 0 || value.trim().toLowerCase() === 'untitled idea'
+}
+
 function truncateText(value: string, maxLength: number) {
   if (value.length <= maxLength) return value
   return `${value.slice(0, maxLength).trim()}…`
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return ''
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleTimeString()
 }
 
 function formatKeyLabel(key: string) {
@@ -99,16 +113,25 @@ export default function VerdictPage() {
 
       const json = await getDebateVerdict(id)
       setData(json)
+      if (json?.idea_title && !isMissingTitle(json.idea_title)) {
+        setIdeaTitle(json.idea_title)
+      }
+      setLastUpdated(formatTimestamp(json?.last_updated || json?.started_at))
       try {
         const stateJson = await getDebateState(id)
-        setIdeaTitle(stateJson?.idea_title ?? null)
+        const stateTitle = stateJson?.idea_title ?? null
+        if (stateTitle && !isMissingTitle(stateTitle)) {
+          setIdeaTitle(stateTitle)
+        } else {
+          const verdictRecord = await getVerdictById(id)
+          setIdeaTitle(verdictRecord?.ideaTitle ?? null)
+        }
       } catch {}
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Failed to fetch verdict'
       setError(message)
     } finally {
       setLoading(false)
-      setLastUpdated(new Date().toLocaleTimeString())
     }
   }
 

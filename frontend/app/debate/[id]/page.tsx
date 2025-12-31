@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { useParams } from 'next/navigation'
 import { Section, Container } from '@/components/section'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/card'
@@ -14,19 +15,48 @@ type DebateState = {
   debate_id: string
   status: string
   transcript: Array<any>
+  current_round?: number
+  last_updated?: string
   error?: string | null
   idea_title?: string
+}
+
+const roundLabels: Record<number, string> = {
+  1: 'Clarification',
+  2: 'Attacks & Analyses',
+  3: 'Defense',
+  4: 'Cross-Examination',
+  5: 'Final Verdict',
+}
+
+const agentAlignments: Record<string, 'left' | 'right' | 'center'> = {
+  Skeptic: 'left',
+  Customer: 'right',
+  Market: 'left',
+  Builder: 'right',
+  Judge: 'left',
+}
+
+function formatTimestamp(value?: string | null) {
+  if (!value) return ''
+  const hasTz = /([zZ]|[+-]\d{2}:\d{2})$/.test(value)
+  const normalized = hasTz ? value : `${value}Z`
+  const parsed = new Date(normalized)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleTimeString()
 }
 
 export default function DebatePage() {
   const params = useParams<{ id: string }>()
   const id = (params?.id as string) || ''
+  const showDebug = process.env.NEXT_PUBLIC_SHOW_DEBUG === 'true'
   const [state, setState] = useState<DebateState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [polling, setPolling] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<string>('')
   const [showRawState, setShowRawState] = useState(false)
+  const [expandedMessages, setExpandedMessages] = useState<Record<string, boolean>>({})
   const prevHashRef = useRef<string | null>(null)
   // Auth guard
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -42,7 +72,7 @@ export default function DebatePage() {
       if (hash !== prevHashRef.current) {
         prevHashRef.current = hash
         setState(data)
-        setLastUpdated(new Date().toLocaleTimeString())
+        setLastUpdated(formatTimestamp(data?.last_updated))
       }
     } catch (err: any) {
       const message = err?.response?.data?.detail || err?.message || 'Failed to fetch debate state'
@@ -66,6 +96,84 @@ export default function DebatePage() {
       setPolling(false)
     }
   }, [state])
+
+  const groupedTranscript = useMemo(
+    () =>
+      (state?.transcript || []).reduce((acc: Record<string, any[]>, item: any) => {
+        const roundKey = String(item?.round || 0)
+        if (!acc[roundKey]) acc[roundKey] = []
+        acc[roundKey].push(item)
+        return acc
+      }, {}),
+    [state?.transcript]
+  )
+
+  const orderedRounds = useMemo(
+    () =>
+      Object.keys(groupedTranscript)
+        .map(key => Number(key))
+        .filter(round => round > 0)
+        .sort((a, b) => a - b),
+    [groupedTranscript]
+  )
+
+  const normalizeMarkdown = (text: string) =>
+    text
+      .split('\n')
+      .map(line => {
+        const trimmed = line.trim()
+        if (!trimmed) return ''
+        if (trimmed.startsWith('•')) {
+          return `- ${trimmed.replace(/^•\s*/, '')}`
+        }
+        if (trimmed.endsWith(':') && !trimmed.startsWith('-')) {
+          return `#### ${trimmed.slice(0, -1)}`
+        }
+        return trimmed
+      })
+      .join('\n')
+
+  const shouldTruncate = (text: string, previewLimit: number) => {
+    const normalized = normalizeMarkdown(text)
+    const lines = normalized.split('\n').filter(line => line.trim().length > 0)
+    const bulletLines = lines.filter(line => line.trim().startsWith('- '))
+    return bulletLines.length > previewLimit || lines.length > previewLimit
+  }
+
+  const renderMessage = (text: string, previewLimit: number, expanded: boolean) => {
+    const normalized = normalizeMarkdown(text)
+
+    const lines = normalized.split('\n').filter(line => line.trim().length > 0)
+    const bulletLines = lines.filter(line => line.trim().startsWith('- '))
+    const usePreview =
+      !expanded && (bulletLines.length > previewLimit || lines.length > previewLimit)
+
+    const previewLines = () => {
+      if (bulletLines.length > 0) {
+        const headings = lines.filter(line => line.trim().startsWith('#### '))
+        return [...headings, ...bulletLines.slice(0, previewLimit)].join('\n')
+      }
+      return lines.slice(0, previewLimit).join('\n')
+    }
+
+    return (
+      <ReactMarkdown
+        components={{
+          h4: ({ children }) => (
+            <div className="font-semibold mt-3 mb-1 text-sm uppercase tracking-[0.12em] text-slate-500">
+              {children}
+            </div>
+          ),
+          ul: ({ children }) => <ul className="ml-5 list-disc space-y-1">{children}</ul>,
+          li: ({ children }) => <li>{children}</li>,
+          p: ({ children }) => <p className="my-1">{children}</p>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        }}
+      >
+        {usePreview ? previewLines() : normalized}
+      </ReactMarkdown>
+    )
+  }
 
   return (
     <AppShell>
@@ -145,6 +253,14 @@ export default function DebatePage() {
                   <CardDescription>Idea</CardDescription>
                   <CardTitle className="text-lg line-clamp-2">
                     {state?.idea_title || 'Untitled idea'}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardDescription>Round</CardDescription>
+                  <CardTitle className="text-lg">
+                    {state?.current_round ? `${state.current_round}/5` : '—'}
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -270,138 +386,201 @@ export default function DebatePage() {
                   <h3 className="font-bold text-lg mb-6 text-gray-900 dark:text-white">
                     Debate Timeline
                   </h3>
-                  <div className="space-y-4">
+                  <div className="space-y-8">
                     {state.transcript?.length ? (
-                      state.transcript.map((item: any, i: number) => {
-                        const agent = item?.agent || 'Agent'
-                        const message = item?.message || item?.text || ''
-                        const timestamp = item?.timestamp
-                          ? new Date(item.timestamp).toLocaleTimeString()
-                          : ''
-                        const round = item?.round || null
-                        const type = item?.type || ''
-
-                        // Color coding for rounds (match homepage process colors), fallback to agent colors
-                        let agentColor =
-                          'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
-                        let agentBadge = ''
-                        if (agent === 'Judge') {
-                          agentColor =
-                            'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-700'
-                          agentBadge = '⚖️'
-                        } else if (agent === 'Skeptic') {
-                          agentColor =
-                            'bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-100 border border-red-200 dark:border-red-700'
-                          agentBadge = '🤨'
-                        } else if (agent === 'Customer') {
-                          agentColor =
-                            'bg-green-50 dark:bg-green-900/30 text-green-900 dark:text-green-100 border border-green-200 dark:border-green-700'
-                          agentBadge = '👥'
-                        } else if (agent === 'Market') {
-                          agentColor =
-                            'bg-purple-50 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-700'
-                          agentBadge = '📊'
-                        } else if (agent === 'Builder') {
-                          agentColor =
-                            'bg-orange-50 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-700'
-                          agentBadge = '🔨'
-                        } else if (agent === 'System') {
-                          agentColor =
-                            'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
-                          agentBadge = '⚙️'
-                        }
-
-                        const roundColorMap: Record<number, string> = {
-                          1: 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-700',
-                          2: 'bg-rose-50 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100 border border-rose-200 dark:border-rose-700',
-                          3: 'bg-purple-50 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-700',
-                          4: 'bg-orange-50 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-700',
-                          5: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-700',
-                        }
-
-                        if (round && roundColorMap[round]) {
-                          agentColor = roundColorMap[round]
-                        }
-
+                      orderedRounds.map(round => {
+                        const roundItems = groupedTranscript[String(round)] || []
                         return (
-                          <div
-                            key={i}
-                            className={`rounded-lg p-4 ${agentColor} transition-all hover:shadow-md`}
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <span className="text-lg">{agentBadge}</span>
-                                <span className="font-bold text-sm">{agent}</span>
-                                {round && agent !== 'System' && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs bg-white/50 dark:bg-slate-800/50"
-                                  >
-                                    Round {round}
-                                  </Badge>
-                                )}
-                                {/* Removed loading spinner on agent start to avoid lingering icons */}
+                          <div key={round} className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white flex items-center justify-center font-bold">
+                                {String(round).padStart(2, '0')}
                               </div>
-                              <span className="text-xs opacity-60">{timestamp}</span>
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
+                                  Round {round}
+                                </p>
+                                <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                                  {roundLabels[round] || 'Debate'}
+                                </p>
+                              </div>
                             </div>
-                            <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                              {/* Render markdown-style formatting */}
-                              {message.split('\n').map((line: string, lineIdx: number) => {
-                                // Bold headings
-                                if (line.startsWith('**') && line.endsWith('**')) {
+
+                            <div className="space-y-4">
+                              {roundItems.map((item: any, i: number) => {
+                                const agent = item?.agent || 'Agent'
+                                const message = item?.message || item?.text || ''
+                                const timestamp = formatTimestamp(item?.timestamp)
+                                const messageKey = item?.timestamp
+                                  ? `${item.timestamp}-${agent}-${item?.type || 'msg'}`
+                                  : `${round}-${i}-${agent}`
+                                const align = agentAlignments[agent] || 'left'
+                                const bubbleAlign =
+                                  align === 'right'
+                                    ? 'justify-end'
+                                    : align === 'center'
+                                      ? 'justify-center'
+                                      : 'justify-start'
+                                const roleLabel =
+                                  item?.type === 'attack'
+                                    ? 'Attack'
+                                    : item?.type === 'defense'
+                                      ? 'Defense'
+                                      : item?.type === 'cross_exam'
+                                        ? 'Cross-Exam'
+                                        : item?.type === 'customer'
+                                          ? 'Customer'
+                                          : item?.type === 'market'
+                                            ? 'Market'
+                                            : item?.type === 'clarification:output'
+                                              ? 'Clarification'
+                                              : item?.type === 'verdict'
+                                                ? 'Verdict'
+                                                : ''
+
+                                if (round === 1 || round === 5) {
                                   return (
-                                    <div key={lineIdx} className="font-bold mt-3 mb-1">
-                                      {line.slice(2, -2)}
+                                    <div
+                                      key={`${round}-${i}`}
+                                      className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm"
+                                    >
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xl">
+                                            {round === 1 ? '🧭' : '🏁'}
+                                          </span>
+                                          <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                            {round === 1 ? 'Round 1 Summary' : 'Final Verdict'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-xs text-slate-500">
+                                            {timestamp}
+                                          </span>
+                                          {round === 5 && item?.type === 'verdict' && (
+                                            <Button
+                                              size="sm"
+                                              className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                                              onClick={() =>
+                                                window.location.assign(`/verdict/${id}`)
+                                              }
+                                            >
+                                              View verdict
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                                        {renderMessage(message, 5, expandedMessages[messageKey])}
+                                      </div>
+                                      {message && shouldTruncate(message, 5) && (
+                                        <div className="mt-3">
+                                          <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() =>
+                                              setExpandedMessages(prev => ({
+                                                ...prev,
+                                                [messageKey]: !prev[messageKey],
+                                              }))
+                                            }
+                                          >
+                                            {expandedMessages[messageKey]
+                                              ? 'Show less'
+                                              : 'Show more'}
+                                          </Button>
+                                        </div>
+                                      )}
                                     </div>
                                   )
                                 }
-                                // Bullet points
-                                if (line.trim().startsWith('•')) {
-                                  return (
-                                    <div key={lineIdx} className="ml-4 my-1">
-                                      {line}
-                                    </div>
-                                  )
+
+                                let agentColor =
+                                  'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
+                                let agentBadge = ''
+                                if (agent === 'Judge') {
+                                  agentColor =
+                                    'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-700'
+                                  agentBadge = '⚖️'
+                                } else if (agent === 'Skeptic') {
+                                  agentColor =
+                                    'bg-rose-50 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100 border border-rose-200 dark:border-rose-700'
+                                  agentBadge = '🤨'
+                                } else if (agent === 'Customer') {
+                                  agentColor =
+                                    'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-700'
+                                  agentBadge = '👥'
+                                } else if (agent === 'Market') {
+                                  agentColor =
+                                    'bg-purple-50 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-700'
+                                  agentBadge = '📊'
+                                } else if (agent === 'Builder') {
+                                  agentColor =
+                                    'bg-orange-50 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-700'
+                                  agentBadge = '🔨'
+                                } else if (agent === 'System') {
+                                  agentColor =
+                                    'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                                  agentBadge = '⚙️'
                                 }
-                                // Regular text
-                                if (line.trim()) {
-                                  return (
-                                    <div key={lineIdx} className="my-1">
-                                      {line}
+
+                                const tailPosition =
+                                  align === 'right'
+                                    ? 'right-4 -bottom-2'
+                                    : align === 'center'
+                                      ? 'left-1/2 -translate-x-1/2 -bottom-2'
+                                      : 'left-4 -bottom-2'
+
+                                return (
+                                  <div key={`${round}-${i}`} className={`flex ${bubbleAlign}`}>
+                                    <div className="flex items-start gap-3 max-w-3xl">
+                                      <div className="h-10 w-10 rounded-full bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-base">
+                                        {agentBadge || '💬'}
+                                      </div>
+                                      <div
+                                        className={`relative max-w-xl rounded-2xl p-4 ${agentColor} transition-all hover:shadow-md text-left`}
+                                      >
+                                        <span
+                                          className={`absolute h-3 w-3 rotate-45 ${agentColor} ${tailPosition}`}
+                                        />
+                                        <div className="flex items-center justify-between mb-3 gap-4">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-sm">{agent}</span>
+                                            {roleLabel && (
+                                              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                                                {roleLabel}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-xs opacity-60">{timestamp}</span>
+                                        </div>
+                                        <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                                          {renderMessage(message, 5, expandedMessages[messageKey])}
+                                        </div>
+                                        {message && shouldTruncate(message, 5) && (
+                                          <div className="mt-3">
+                                            <Button
+                                              size="sm"
+                                              variant="secondary"
+                                              onClick={() =>
+                                                setExpandedMessages(prev => ({
+                                                  ...prev,
+                                                  [messageKey]: !prev[messageKey],
+                                                }))
+                                              }
+                                            >
+                                              {expandedMessages[messageKey]
+                                                ? 'Show less'
+                                                : 'Show more'}
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                  )
-                                }
-                                return <div key={lineIdx} className="h-1" />
+                                  </div>
+                                )
                               })}
                             </div>
-
-                            {/* Metadata badges */}
-                            {item?.metadata && Object.keys(item.metadata).length > 0 && (
-                              <div className="mt-4 pt-3 border-t border-current opacity-20 flex flex-wrap gap-2">
-                                {Object.entries(item.metadata).map(
-                                  ([key, value]: [string, any]) => {
-                                    // Skip displaying the agent key as we already show it
-                                    if (key === 'agent') return null
-
-                                    // Format key for display (convert snake_case to Title Case)
-                                    const displayKey = key
-                                      .split('_')
-                                      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-                                      .join(' ')
-
-                                    return (
-                                      <Badge
-                                        key={key}
-                                        variant="outline"
-                                        className="text-xs whitespace-nowrap bg-white/30 dark:bg-slate-800/30"
-                                      >
-                                        {displayKey}: {String(value)}
-                                      </Badge>
-                                    )
-                                  }
-                                )}
-                              </div>
-                            )}
                           </div>
                         )
                       })
@@ -417,21 +596,23 @@ export default function DebatePage() {
                 </div>
 
                 {/* Raw state for debugging/visibility */}
-                <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
-                  <button
-                    onClick={() => setShowRawState(!showRawState)}
-                    className="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-2 mb-4"
-                  >
-                    <span className="text-lg">{showRawState ? '▼' : '▶'}</span> Debug: Raw State
-                  </button>
-                  {showRawState && (
-                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 overflow-auto max-h-96">
-                      <pre className="text-xs font-mono text-slate-700 dark:text-slate-300">
-                        {JSON.stringify(state, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
+                {showDebug && (
+                  <div className="border-t border-slate-200 dark:border-slate-700 pt-6">
+                    <button
+                      onClick={() => setShowRawState(!showRawState)}
+                      className="text-sm font-semibold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-2 mb-4"
+                    >
+                      <span className="text-lg">{showRawState ? '▼' : '▶'}</span> Debug: Raw State
+                    </button>
+                    {showRawState && (
+                      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 overflow-auto max-h-96">
+                        <pre className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                          {JSON.stringify(state, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

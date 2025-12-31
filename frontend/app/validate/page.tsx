@@ -27,6 +27,7 @@ interface ActiveDebateItem {
 }
 
 const LOCAL_ACTIVE_KEY = 'ideaaudit_active_validations'
+const VALIDATION_CREDIT_COST = 2
 
 const steps = [
   {
@@ -103,6 +104,11 @@ export default function ValidatePage() {
       try {
         setActiveLoading(true)
         const items = await getActiveDebates()
+        if (items.length === 0) {
+          setActiveDebates([])
+          writeLocalActive([])
+          return
+        }
         // Merge server view with any locally cached records
         const dedup = new Map<string, ActiveDebateItem>()
         ;[...local, ...items].forEach(v => dedup.set(v.id, v))
@@ -122,7 +128,7 @@ export default function ValidatePage() {
 
   async function handleValidate() {
     if (!prd.trim()) return
-    if (credits !== null && credits <= 0) {
+    if (credits !== null && credits < VALIDATION_CREDIT_COST) {
       setShowCreditsModal(true)
       return
     }
@@ -136,7 +142,7 @@ export default function ValidatePage() {
         upsertActive({ id: data.debate_id, ideaTitle: data.idea_title, status: 'pending' })
       }
       if (credits !== null) {
-        setCredits(Math.max(credits - 1, 0))
+        setCredits(Math.max(credits - VALIDATION_CREDIT_COST, 0))
       }
       toast.success('Validation started. Jump into the debate or verdict tabs.')
     } catch (err: any) {

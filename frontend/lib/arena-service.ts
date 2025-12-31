@@ -34,6 +34,9 @@ export interface DebateVerdictResponse {
   verdict: any
   status: string
   message: string
+  idea_title?: string | null
+  started_at?: string | null
+  last_updated?: string | null
 }
 
 function normalizeVerdict(item: any): VerdictRecord {

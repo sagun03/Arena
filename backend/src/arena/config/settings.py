@@ -46,16 +46,16 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str | None = None
     stripe_success_url: str = "http://localhost:3000/billing/success"
     stripe_cancel_url: str = "http://localhost:3000/billing/cancel"
-    stripe_price_starter_cad: str | None = None
-    stripe_price_plus_cad: str | None = None
-    stripe_price_pro_cad: str | None = None
-    stripe_price_starter_inr: str | None = None
-    stripe_price_plus_inr: str | None = None
-    stripe_price_pro_inr: str | None = None
+    stripe_portal_return_url: str = "http://localhost:3000/pricing"
+    stripe_price_starter_usd: str | None = None
+    stripe_price_pro_monthly_usd: str | None = None
+    stripe_price_growth_monthly_usd: str | None = None
+    stripe_price_scale_monthly_usd: str | None = None
 
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 settings = Settings()

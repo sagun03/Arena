@@ -1,0 +1,21 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/your-org/ideaaudit-backend}:${BACKEND_TAG:-prod}
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      FIREBASE_SERVICE_ACCOUNT_PATH: /run/secrets/firebase_service_account
+    secrets:
+      - firebase_service_account
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/your-org/ideaaudit-frontend}:${FRONTEND_TAG:-prod}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+secrets:
+  firebase_service_account:
+    file: ${FIREBASE_SERVICE_ACCOUNT_FILE:-./backend/service-account.json}

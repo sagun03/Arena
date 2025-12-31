@@ -10,7 +10,7 @@ import { Mail01, MessageDotsCircle, Shield01, Zap } from '@untitledui/icons'
 const faqs = [
   {
     question: 'How do credits work?',
-    answer: 'Each validation costs 1 credit. Your free account includes 2 credits to get started.',
+    answer: 'Each validation costs 2 credits. Your free account includes 5 credits to get started.',
     icon: Zap,
   },
   {

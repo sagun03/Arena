@@ -3,11 +3,12 @@
 import asyncio
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 import anyio
 from arena.agents.builder_agent import BuilderAgent
+from arena.agents.cross_exam_agent import CrossExamAgent
 from arena.agents.customer_agent import CustomerAgent
 from arena.agents.judge_agent import JudgeAgent
 from arena.agents.market_agent import MarketAgent
@@ -34,7 +35,7 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
-VALIDATION_CREDIT_COST = 1
+VALIDATION_CREDIT_COST = 2
 
 
 def detect_idea_domain(
@@ -270,6 +271,9 @@ class VerdictResponse(BaseModel):
     verdict: Verdict | None = Field(None, description="Final verdict if completed")
     status: str = Field(..., description="Status: pending, completed, failed")
     message: str = Field(..., description="Status message")
+    idea_title: Optional[str] = Field(None, description="Title of the idea being debated")
+    started_at: Optional[str] = Field(None, description="Debate start timestamp (ISO)")
+    last_updated: Optional[str] = Field(None, description="Last update timestamp (ISO)")
 
 
 class VerdictRecord(BaseModel):
@@ -309,6 +313,15 @@ def _serialize_timestamp(ts: Any) -> Optional[str]:
 
     if ts is None:
         return None
+
+    if isinstance(ts, str):
+        try:
+            parsed = datetime.fromisoformat(ts)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=timezone.utc).isoformat()
+            return parsed.isoformat()
+        except ValueError:
+            return ts
 
     try:
         return ts.isoformat()
@@ -398,20 +411,20 @@ def _build_firestore_record(
         test_plan = verdict_dict.get("test_plan") or verdict_dict.get("testPlan")
 
     record = {
-        "debateId": debate_id,
-        "userId": uid,
-        "ideaTitle": idea_title,
+        "debate_id": debate_id,
+        "user_id": uid,
+        "idea_title": idea_title,
         "status": status,
         "decision": decision,
         "confidence": confidence,
         "reasoning": reasoning,
         "scorecard": scorecard,
-        "killShots": kill_shots,
+        "kill_shots": kill_shots,
         "assumptions": assumptions,
-        "testPlan": test_plan,
+        "test_plan": test_plan,
         "verdict": verdict_dict,
-        "createdAt": existing_created_at or created_at,
-        "updatedAt": created_at,
+        "created_at": existing_created_at or created_at,
+        "updated_at": created_at,
     }
 
     return record
@@ -437,14 +450,14 @@ def _format_verdict_record(doc_id: str, data: Dict[str, Any]) -> VerdictRecord:
 
     return VerdictRecord(
         id=doc_id,
-        debate_id=data.get("debateId", doc_id),
+        debate_id=data.get("debate_id") or data.get("debateId") or doc_id,
         status=data.get("status", "pending"),
         decision=data.get("decision"),
-        idea_title=data.get("ideaTitle"),
+        idea_title=data.get("idea_title") or data.get("ideaTitle"),
         confidence=data.get("confidence"),
         reasoning=data.get("reasoning"),
-        created_at=_serialize_timestamp(data.get("createdAt")),
-        updated_at=_serialize_timestamp(data.get("updatedAt")),
+        created_at=_serialize_timestamp(data.get("created_at") or data.get("createdAt")),
+        updated_at=_serialize_timestamp(data.get("updated_at") or data.get("updatedAt")),
         verdict=data.get("verdict"),
     )
 
@@ -483,14 +496,24 @@ async def list_verdicts(
         db = await anyio.to_thread.run_sync(get_firestore_client)
         verdicts_ref = db.collection("verdicts")
 
-        query = verdicts_ref.where("userId", "==", uid).order_by(
-            "createdAt", direction=firestore.Query.DESCENDING
+        query = verdicts_ref.where("user_id", "==", uid).order_by(
+            "created_at", direction=firestore.Query.DESCENDING
         )
         if limit:
             query = query.limit(limit)
 
         snapshots = await anyio.to_thread.run_sync(lambda: list(query.stream()))
         verdicts = [_format_verdict_record(doc.id, doc.to_dict()) for doc in snapshots]
+        if verdicts:
+            return VerdictListResponse(verdicts=verdicts)
+
+        fallback_query = verdicts_ref.where("userId", "==", uid).order_by(
+            "createdAt", direction=firestore.Query.DESCENDING
+        )
+        if limit:
+            fallback_query = fallback_query.limit(limit)
+        fallback_snapshots = await anyio.to_thread.run_sync(lambda: list(fallback_query.stream()))
+        verdicts = [_format_verdict_record(doc.id, doc.to_dict()) for doc in fallback_snapshots]
         return VerdictListResponse(verdicts=verdicts)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to fetch verdicts: {exc}") from exc
@@ -519,7 +542,7 @@ async def get_verdict_document(
         raise HTTPException(status_code=404, detail="Verdict not found")
 
     data = snapshot.to_dict() or {}
-    if data.get("userId") != uid:
+    if (data.get("user_id") or data.get("userId")) != uid:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     return _format_verdict_record(snapshot.id, data)
@@ -548,18 +571,28 @@ async def create_verdict_document(
         doc_ref = db.collection("verdicts").document(payload.debate_id)
         existing_snapshot = await anyio.to_thread.run_sync(doc_ref.get)
         existing_data = existing_snapshot.to_dict() if existing_snapshot.exists else {}
-        existing_owner = existing_data.get("userId") if existing_data else None
+        existing_owner = (
+            existing_data.get("user_id") or existing_data.get("userId") if existing_data else None
+        )
         if existing_owner and existing_owner != uid:
             raise HTTPException(status_code=403, detail="Forbidden")
+
+        idea_title = (
+            payload.idea_title or existing_data.get("idea_title") or existing_data.get("ideaTitle")
+        )
+        if not idea_title:
+            state = await get_debate_state(payload.debate_id)
+            idea_title = (state or {}).get("idea_title") or (state or {}).get("ideaTitle")
 
         record = _build_firestore_record(
             debate_id=payload.debate_id,
             uid=uid,
             status=payload.status,
-            idea_title=payload.idea_title,
+            idea_title=idea_title,
             verdict=payload.verdict,
             created_at=now,
-            existing_created_at=(existing_data or {}).get("createdAt"),
+            existing_created_at=(existing_data or {}).get("created_at")
+            or (existing_data or {}).get("createdAt"),
         )
 
         # Preserve existing fields when payload omits them
@@ -569,9 +602,17 @@ async def create_verdict_document(
             record["confidence"] = record.get("confidence") or existing_data.get("confidence")
             record["reasoning"] = record.get("reasoning") or existing_data.get("reasoning")
             record["scorecard"] = record.get("scorecard") or existing_data.get("scorecard")
-            record["killShots"] = record.get("killShots") or existing_data.get("killShots")
+            record["kill_shots"] = (
+                record.get("kill_shots")
+                or existing_data.get("kill_shots")
+                or existing_data.get("killShots")
+            )
             record["assumptions"] = record.get("assumptions") or existing_data.get("assumptions")
-            record["testPlan"] = record.get("testPlan") or existing_data.get("testPlan")
+            record["test_plan"] = (
+                record.get("test_plan")
+                or existing_data.get("test_plan")
+                or existing_data.get("testPlan")
+            )
 
         await anyio.to_thread.run_sync(doc_ref.set, record, True)
         return _format_verdict_record(doc_ref.id, record)
@@ -718,10 +759,12 @@ async def validate_idea(
             debate_id=debate_id,
             uid=uid,
             status="pending",
-            idea_title=existing_data.get("ideaTitle") or idea_title,
+            idea_title=existing_data.get("idea_title")
+            or existing_data.get("ideaTitle")
+            or idea_title,
             verdict=existing_data.get("verdict"),
             created_at=now,
-            existing_created_at=existing_data.get("createdAt"),
+            existing_created_at=existing_data.get("created_at") or existing_data.get("createdAt"),
         )
         await anyio.to_thread.run_sync(lambda: doc_ref.set(record, merge=True))
 
@@ -797,6 +840,49 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
         Formatted transcript with agent messages in chat style
     """
     formatted = []
+    max_bullets = 200
+
+    def strip_code_fences(text: str) -> str:
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        return text.strip()
+
+    def parse_json_payload(text: str) -> Dict[str, Any] | None:
+        raw = text.strip()
+        if "```json" in raw:
+            start = raw.find("```json") + len("```json")
+            end = raw.find("```", start)
+            if end != -1:
+                raw = raw[start:end].strip()
+        elif "```" in raw:
+            start = raw.find("```") + len("```")
+            end = raw.find("```", start)
+            if end != -1:
+                raw = raw[start:end].strip()
+        else:
+            brace_start = raw.find("{")
+            brace_end = raw.rfind("}")
+            if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
+                raw = raw[brace_start : brace_end + 1].strip()
+        try:
+            return json.loads(strip_code_fences(raw))
+        except Exception:
+            return None
+
+    def bullets(items: list[str]) -> str:
+        trimmed = [item.strip() for item in items if item and item.strip()]
+        return "\n".join([f"• {item}" for item in trimmed[:max_bullets]]) or "• —"
+
+    def bullets_from_text(text: str) -> str:
+        lines = []
+        for line in text.splitlines():
+            if line.strip().startswith("•"):
+                lines.append(line.strip().lstrip("•").strip())
+        return bullets(lines)
 
     for entry in raw_transcript:
         agent = entry.get("agent", "System")
@@ -812,32 +898,19 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
             message = "Judge is analyzing and clarifying the idea..."
 
         elif entry_type == "clarification:output":
-            # Parse JSON from code blocks and extract key questions
-            try:
-                # Remove code blocks
-                json_str = raw_text
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.startswith("```"):
-                    json_str = json_str[3:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-
-                parsed = json.loads(json_str.strip())
+            parsed = parse_json_payload(raw_text)
+            if parsed:
                 questions = parsed.get("clarification_questions", [])
                 gaps = parsed.get("identified_gaps", [])
                 quality = parsed.get("quality_score", 0)
 
-                question_summary = "\n".join(
-                    [f"• {q[:100]}..." if len(q) > 100 else f"• {q}" for q in questions[:3]]
-                )
+                question_summary = bullets(questions)
+                gap_summary = bullets(gaps)
                 message = (
                     f"**Judge's Analysis:**\n\nKey Questions:\n{question_summary}\n\n"
-                    f"Key Gaps Identified:\n"
-                    + "\n".join([f"• {g}" for g in gaps[:3]])
-                    + f"\n\nQuality Score: {quality}/1.0"
+                    f"Key Gaps Identified:\n{gap_summary}\n\nQuality Score: {quality}/1.0"
                 )
-            except Exception:
+            else:
                 quality_score = entry.get("summary", {}).get("quality_score", "N/A")
                 message = f"Judge analyzed the idea (Quality: {quality_score}/1.0)"
 
@@ -846,43 +919,142 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
 
         elif entry_type == "attack":
             # Skeptic attack
-            try:
-                json_str = raw_text
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.startswith("```"):
-                    json_str = json_str[3:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                parsed = json.loads(json_str.strip())
-                attacks = parsed.get("fatal_flaws", [])[:2]
-                message = "**Skeptic's Attack:**\n\n" + "\n".join([f"• {a}" for a in attacks])
-            except Exception:
-                message = "Skeptic provided attack analysis"
+            parsed = parse_json_payload(raw_text)
+            if parsed:
+                attacks = parsed.get("fatal_flaws", []) or parsed.get("attack_points", [])
+                message = "**Skeptic's Attack:**\n\n" + bullets(attacks)
+            else:
+                message = raw_text.strip() or "Skeptic provided attack analysis"
 
         elif entry_type == "customer":
-            message = "Customer reality analyst shared insights"
+            parsed = parse_json_payload(raw_text)
+            if parsed:
+                problem = parsed.get("problem_validation", {})
+                willingness = parsed.get("willingness_to_pay", {})
+                alternatives = parsed.get("alternatives", [])
+                segments = parsed.get("customer_segments", [])
+                concerns = parsed.get("critical_concerns", [])
+
+                alt_summary = [
+                    (
+                        f"{a.get('alternative')}: {a.get('why_used')} "
+                        f"(Barrier: {a.get('switching_barrier')})"
+                    )
+                    for a in alternatives
+                    if isinstance(a, dict)
+                ]
+                segment_summary = [
+                    (
+                        f"{s.get('segment')} ({s.get('adoption_likelihood')}): "
+                        f"{s.get('reasoning')}"
+                    )
+                    for s in segments
+                    if isinstance(s, dict)
+                ]
+                bullet_lines = [
+                    (
+                        f"Problem exists: {problem.get('problem_exists')} "
+                        f"(Pain {problem.get('pain_level')})"
+                    ),
+                    (
+                        f"Willing to pay: {willingness.get('will_pay')} "
+                        f"({willingness.get('estimated_price')})"
+                    ),
+                    *(alt_summary[:2]),
+                    *(segment_summary[:2]),
+                    *(concerns[:2]),
+                ]
+                message = "**Customer Insights:**\n\n" + bullets(bullet_lines)
+            else:
+                message = "**Customer Insights:**\n\n" + bullets_from_text(raw_text)
 
         elif entry_type == "market":
-            message = "Market analyst evaluated competition"
+            parsed = parse_json_payload(raw_text)
+            if parsed:
+                market = parsed.get("market_analysis", {})
+                saturation = parsed.get("market_saturation", {})
+                competition = parsed.get("competition", [])
+                barriers = parsed.get("barriers_to_entry", [])
+                advantage = parsed.get("competitive_advantage", {})
+                risks = parsed.get("market_risks", [])
+
+                competition_summary = [
+                    f"{c.get('competitor')} ({c.get('type')}): {c.get('strength')}"
+                    for c in competition
+                    if isinstance(c, dict)
+                ]
+                bullet_lines = [
+                    (
+                        f"Market size realistic: {market.get('market_size_realistic')} "
+                        f"({market.get('market_growth')})"
+                    ),
+                    (
+                        f"Saturation: {saturation.get('is_saturated')} "
+                        f"({saturation.get('saturation_level')})"
+                    ),
+                    *(competition_summary[:2]),
+                    *(barriers[:1]),
+                    (
+                        f"Advantage: {advantage.get('has_advantage')} "
+                        f"({advantage.get('advantage_type')})"
+                    ),
+                    *(risks[:1]),
+                ]
+                message = "**Market Analysis:**\n\n" + bullets(bullet_lines)
+            else:
+                message = "**Market Analysis:**\n\n" + bullets_from_text(raw_text)
 
         elif entry_type == "defense:start":
             message = "Builder is preparing defense..."
 
         elif entry_type == "defense":
-            try:
-                json_str = raw_text
-                if json_str.startswith("```json"):
-                    json_str = json_str[7:]
-                if json_str.startswith("```"):
-                    json_str = json_str[3:]
-                if json_str.endswith("```"):
-                    json_str = json_str[:-3]
-                parsed = json.loads(json_str.strip())
-                strengths = parsed.get("constrained_defense_points", [])[:2]
-                message = "**Builder's Defense:**\n\n" + "\n".join([f"• {s}" for s in strengths])
-            except Exception:
-                message = "Builder provided defense"
+            parsed = parse_json_payload(raw_text)
+            if parsed:
+                feasibility = parsed.get("feasibility_analysis", {})
+                defense = parsed.get("defense", {})
+                defense_points = defense.get("defense_points", [])
+                strengths = defense.get("strengths", []) or parsed.get(
+                    "constrained_defense_points", []
+                )
+                risks = parsed.get("risks", [])
+
+                defense_summary = [
+                    (f"{p.get('point')} " f"(Facts: {', '.join(p.get('supporting_facts', []))})")
+                    for p in defense_points
+                    if isinstance(p, dict)
+                ]
+                risks_summary = [
+                    f"{r.get('risk')} ({r.get('severity')}): {r.get('mitigation')}"
+                    for r in risks
+                    if isinstance(r, dict)
+                ]
+                bullet_lines = [
+                    (
+                        f"Feasibility: {feasibility.get('technical_feasibility')} technical / "
+                        f"{feasibility.get('business_feasibility')} business"
+                    ),
+                    *(defense_summary[:2]),
+                    *(strengths[:2]),
+                    *(risks_summary[:1]),
+                ]
+                message = "**Builder's Defense:**\n\n" + bullets(bullet_lines)
+            else:
+                message = "**Builder's Defense:**\n\n" + bullets_from_text(raw_text)
+        elif entry_type == "cross_exam:start":
+            message = "Cross-examination round: agents challenge each other's claims."
+
+        elif entry_type == "cross_exam":
+            parsed = parse_json_payload(raw_text)
+            if parsed:
+                challenges = parsed.get("challenges", [])
+                challenge_lines = [
+                    f"{c.get('target_agent')}: {c.get('target_claim')} ({c.get('severity')})"
+                    for c in challenges
+                    if isinstance(c, dict)
+                ]
+                message = "**Cross-Examination:**\n\n" + bullets(challenge_lines)
+            else:
+                message = raw_text.strip() or "Cross-examination delivered challenges"
 
         elif entry_type == "quality_gate":
             decision = entry.get("summary", {}).get("decision", "unknown")
@@ -903,7 +1075,7 @@ def _format_transcript_for_chat(raw_transcript: list) -> list:
 
         else:
             # Fallback: use the raw text
-            message = raw_text[:200] if len(raw_text) > 200 else raw_text
+            message = raw_text
 
         if message:
             formatted.append(
@@ -954,12 +1126,30 @@ async def get_verdict(
     status = state_dict.get("status", state_dict.get("round_status", "pending"))
     verdict_dict = state_dict.get("verdict")
 
+    idea_title = state_dict.get("idea_title") or state_dict.get("ideaTitle") or "Untitled Idea"
+    started_at = _serialize_timestamp(state_dict.get("started_at"))
+    last_updated = _serialize_timestamp(state_dict.get("last_updated"))
+
+    if not idea_title or idea_title.strip().lower() == "untitled idea":
+        db = await anyio.to_thread.run_sync(get_firestore_client)
+        verdict_doc = await anyio.to_thread.run_sync(
+            db.collection("verdicts").document(debate_id).get
+        )
+        if verdict_doc.exists:
+            verdict_data = verdict_doc.to_dict() or {}
+            stored_title = verdict_data.get("idea_title") or verdict_data.get("ideaTitle")
+            if stored_title:
+                idea_title = stored_title
+
     if status != "completed" or not verdict_dict:
         return VerdictResponse(
             debate_id=debate_id,
             verdict=None,
             status=status,
             message="Debate is still in progress or not completed yet.",
+            idea_title=idea_title,
+            started_at=started_at,
+            last_updated=last_updated,
         )
 
     # Convert verdict dict to Verdict model
@@ -970,6 +1160,9 @@ async def get_verdict(
             verdict=verdict,
             status="completed",
             message="Verdict available",
+            idea_title=idea_title,
+            started_at=started_at,
+            last_updated=last_updated,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to parse verdict: {str(e)}")
@@ -1211,13 +1404,13 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             previous_context=clarification,
             historical_context=historical_context_text,
         )
-        skeptic_text, skeptic_metadata = format_agent_response(skeptic_result, "Skeptic")
+        _, skeptic_metadata = format_agent_response(skeptic_result, "Skeptic")
         await append_event(
             {
                 "agent": "Skeptic",
                 "round": 2,
                 "type": "attack",
-                "text": skeptic_text,
+                "text": skeptic_result.get("raw_response", ""),
                 "metadata": skeptic_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -1239,13 +1432,13 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             previous_context=clarification,
             historical_context=historical_context_text,
         )
-        customer_text, customer_metadata = format_agent_response(customer_result, "Customer")
+        _, customer_metadata = format_agent_response(customer_result, "Customer")
         await append_event(
             {
                 "agent": "Customer",
                 "round": 2,
                 "type": "customer",
-                "text": customer_text,
+                "text": customer_result.get("raw_response", ""),
                 "metadata": customer_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -1267,13 +1460,13 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             previous_context=clarification,
             historical_context=historical_context_text,
         )
-        market_text, market_metadata = format_agent_response(market_result, "Market")
+        _, market_metadata = format_agent_response(market_result, "Market")
         await append_event(
             {
                 "agent": "Market",
                 "round": 2,
                 "type": "market",
-                "text": market_text,
+                "text": market_result.get("raw_response", ""),
                 "metadata": market_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -1327,13 +1520,13 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             evidence_tags=round2_evidence,
             historical_context=historical_context_text,
         )
-        defense_text, defense_metadata = format_agent_response(defense_result, "Builder")
+        _, defense_metadata = format_agent_response(defense_result, "Builder")
         await append_event(
             {
                 "agent": "Builder",
                 "round": 3,
                 "type": "defense",
-                "text": defense_text,
+                "text": defense_result.get("raw_response", ""),
                 "metadata": defense_metadata,
                 "timestamp": datetime.utcnow().isoformat(),
             }
@@ -1359,6 +1552,87 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             }
         )
 
+        # Round 4: Cross-examination
+        await append_event(
+            {
+                "agent": "System",
+                "round": 4,
+                "type": "cross_exam:start",
+                "text": "Cross-examination: agents challenge each other's claims...",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
+
+        cross_exam_roles = [
+            {
+                "name": "Skeptic",
+                "perspective": "Push hardest on logical gaps, hype, and fatal flaws.",
+            },
+            {
+                "name": "Customer",
+                "perspective": (
+                    "Challenge claims that ignore real user behavior or willingness to pay."
+                ),
+            },
+            {
+                "name": "Market",
+                "perspective": "Challenge market sizing, competition, and differentiation claims.",
+            },
+            {
+                "name": "Builder",
+                "perspective": (
+                    "Challenge feasibility critiques with concrete constraints and facts."
+                ),
+            },
+        ]
+
+        cross_examination: list[dict[str, Any]] = []
+        cross_exam_evidence = []
+        attacks_payload = {
+            "skeptic": skeptic_result.get("response"),
+            "customer": customer_result.get("response"),
+            "market": market_result.get("response"),
+        }
+        defense_payload = defense_result.get("response")
+
+        for role in cross_exam_roles:
+            other_claims = {
+                "attacks": attacks_payload,
+                "defense": defense_payload,
+            }
+            cross_exam_agent = CrossExamAgent(
+                name=role["name"],
+                perspective=role["perspective"],
+                debate_id=debate_id,
+            )
+            cross_exam_result = await cross_exam_agent.cross_examine(
+                idea_text=idea.original_prd_text,
+                clarification=clarification.get("raw_response", ""),
+                attacks=attacks_payload,
+                defense=defense_payload,
+                other_claims=other_claims,
+            )
+            cross_examination.append(
+                {
+                    "agent": role["name"],
+                    "response": cross_exam_result.get("response"),
+                }
+            )
+            cross_exam_evidence.extend(cross_exam_result.get("evidence_tags", []))
+            await append_event(
+                {
+                    "agent": role["name"],
+                    "round": 4,
+                    "type": "cross_exam",
+                    "text": cross_exam_result.get("raw_response", ""),
+                    "metadata": {
+                        "agent": role["name"],
+                        "evidence_count": len(cross_exam_result.get("evidence_tags", [])),
+                    },
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
+
         # Round 5: Verdict
         await append_event(
             {
@@ -1374,8 +1648,10 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
             clarification=clarification.get("raw_response", ""),
             attacks=attacks,
             defense=defense_result.get("response", ""),
-            cross_examination=[],
-            evidence_tags=round2_evidence + defense_result.get("evidence_tags", []),
+            cross_examination=cross_examination,
+            evidence_tags=round2_evidence
+            + defense_result.get("evidence_tags", [])
+            + cross_exam_evidence,
         )
 
         # Append final verdict

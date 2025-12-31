@@ -25,7 +25,9 @@ class ExtractedStructure(BaseModel):
     )
     lists: Dict[str, List[Any]] = Field(
         default_factory=dict,
-        description="Lists extracted (competitors, features, risks, etc.) - can be strings or objects",
+        description=(
+            "Lists extracted (competitors, features, risks, etc.) - can be strings or objects"
+        ),
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,

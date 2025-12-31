@@ -65,7 +65,10 @@ export default function ForgotPasswordPage() {
                     folder.
                   </p>
                 </div>
-                <Button asChild className="w-full" variant="secondary">
+                <Button
+                  asChild
+                  className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
                   <Link href="/auth/login">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Sign In
@@ -105,12 +108,19 @@ export default function ForgotPasswordPage() {
                       <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                     </div>
                   )}
-                  <Button type="submit" disabled={loading} className="w-full">
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                  >
                     {loading ? 'Sending...' : 'Send Reset Link'}
                     {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
                   </Button>
                 </form>
-                <Button asChild variant="secondary" className="w-full">
+                <Button
+                  asChild
+                  className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
                   <Link href="/auth/login">
                     <ArrowLeft className="w-4 h-4 mr-2" />
                     Back to Sign In

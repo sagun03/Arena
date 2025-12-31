@@ -13,11 +13,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Logo } from '@/components/logo'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ArrowRight } from '@untitledui/icons'
+import { useCredits } from '@/app/providers/credits-provider'
 
 export default function LoginPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const { setCredits } = useCredits()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,6 +40,9 @@ export default function LoginPage() {
 
       localStorage.setItem('idToken', data.idToken)
       localStorage.setItem('sessionToken', data.sessionToken)
+      if (typeof data?.profile?.credits === 'number') {
+        setCredits(data.profile.credits)
+      }
       toast.success('Login successful! Redirecting...')
       setTimeout(() => router.push(redirectTo), 500)
     } catch (err: any) {
@@ -58,6 +63,9 @@ export default function LoginPage() {
       const { data } = await apiClient.post('/auth/google', { idToken })
       localStorage.setItem('idToken', data.idToken)
       localStorage.setItem('sessionToken', data.sessionToken)
+      if (typeof data?.profile?.credits === 'number') {
+        setCredits(data.profile.credits)
+      }
       toast.success('Google login successful! Redirecting...')
       setTimeout(() => router.push(redirectTo), 500)
     } catch (err: any) {
@@ -130,7 +138,11 @@ export default function LoginPage() {
                   <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                 </div>
               )}
-              <Button type="submit" disabled={loading} className="w-full">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+              >
                 {loading ? 'Signing in...' : 'Sign In'}
                 {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
               </Button>
@@ -149,7 +161,11 @@ export default function LoginPage() {
             </div>
 
             {/* Google OAuth */}
-            <Button onClick={onGoogle} variant="secondary" disabled={loading} className="w-full">
+            <Button
+              onClick={onGoogle}
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+            >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path
                   fill="currentColor"
