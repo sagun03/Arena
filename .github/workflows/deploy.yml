@@ -22,6 +22,8 @@ jobs:
     outputs:
       deploy_env: ${{ steps.resolve.outputs.deploy_env }}
       image_tag: ${{ steps.resolve.outputs.image_tag }}
+      backend_image: ${{ steps.resolve.outputs.backend_image }}
+      frontend_image: ${{ steps.resolve.outputs.frontend_image }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,23 +50,25 @@ jobs:
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "NEXT_PUBLIC_API_URL=$API_URL" >> "$GITHUB_ENV"
           echo "NEXT_PUBLIC_SHOW_DEBUG=$SHOW_DEBUG" >> "$GITHUB_ENV"
+          echo "backend_image=${{ secrets.GAR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPO }}/ideaaudit-backend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "frontend_image=${{ secrets.GAR_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GAR_REPO }}/ideaaudit-frontend:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure Docker auth for Artifact Registry
+        run: gcloud auth configure-docker ${{ secrets.GAR_REGION }}-docker.pkg.dev
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build and push backend
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           file: ./backend/Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/ideaaudit-backend:${{ steps.resolve.outputs.image_tag }}
-            ghcr.io/${{ github.repository }}/ideaaudit-backend:${{ github.sha }}
+          tags: ${{ steps.resolve.outputs.backend_image }}
       - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:
@@ -74,52 +78,56 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
             NEXT_PUBLIC_SHOW_DEBUG=${{ env.NEXT_PUBLIC_SHOW_DEBUG }}
-          tags: |
-            ghcr.io/${{ github.repository }}/ideaaudit-frontend:${{ steps.resolve.outputs.image_tag }}
-            ghcr.io/${{ github.repository }}/ideaaudit-frontend:${{ github.sha }}
+          tags: ${{ steps.resolve.outputs.frontend_image }}
 
   deploy_dev:
     runs-on: ubuntu-latest
     needs: build_and_push
-    if: needs.build_and_push.outputs.deploy_env == 'dev' && secrets.DEPLOY_HOST_DEV != ''
+    if: needs.build_and_push.outputs.deploy_env == 'dev'
     steps:
-      - name: Deploy (dev)
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          host: ${{ secrets.DEPLOY_HOST_DEV }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
-              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            fi
-            cd "${{ secrets.DEPLOY_PATH_DEV }}"
-            export BACKEND_IMAGE="ghcr.io/${{ github.repository }}/ideaaudit-backend"
-            export FRONTEND_IMAGE="ghcr.io/${{ github.repository }}/ideaaudit-frontend"
-            export BACKEND_TAG="${{ needs.build_and_push.outputs.image_tag }}"
-            export FRONTEND_TAG="${{ needs.build_and_push.outputs.image_tag }}"
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy backend (dev)
+        run: |
+          gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_DEV }}" \
+            --image "${{ needs.build_and_push.outputs.backend_image }}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated
+      - name: Deploy frontend (dev)
+        run: |
+          gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_DEV }}" \
+            --image "${{ needs.build_and_push.outputs.frontend_image }}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated
 
   deploy_prod:
     runs-on: ubuntu-latest
     needs: build_and_push
-    if: needs.build_and_push.outputs.deploy_env == 'prod' && secrets.DEPLOY_HOST_PROD != ''
+    if: needs.build_and_push.outputs.deploy_env == 'prod'
     steps:
-      - name: Deploy (prod)
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          host: ${{ secrets.DEPLOY_HOST_PROD }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            if [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
-              echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            fi
-            cd "${{ secrets.DEPLOY_PATH_PROD }}"
-            export BACKEND_IMAGE="ghcr.io/${{ github.repository }}/ideaaudit-backend"
-            export FRONTEND_IMAGE="ghcr.io/${{ github.repository }}/ideaaudit-frontend"
-            export BACKEND_TAG="${{ needs.build_and_push.outputs.image_tag }}"
-            export FRONTEND_TAG="${{ needs.build_and_push.outputs.image_tag }}"
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy backend (prod)
+        run: |
+          gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_PROD }}" \
+            --image "${{ needs.build_and_push.outputs.backend_image }}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated
+      - name: Deploy frontend (prod)
+        run: |
+          gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_PROD }}" \
+            --image "${{ needs.build_and_push.outputs.frontend_image }}" \
+            --region "${{ secrets.GCP_REGION }}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated
