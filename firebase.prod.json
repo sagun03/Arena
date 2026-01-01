@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "site": "idea-audit-prod",
+    "public": "frontend/public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "idea-audit-frontend-prod",
+          "region": "us-central1"
+        }
+      }
+    ]
+  }
+}
