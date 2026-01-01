@@ -4,6 +4,7 @@ from typing import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from arena.auth.dependencies import require_auth
 from arena.config.settings import Settings
 from arena.main import app
 from fastapi.testclient import TestClient
@@ -23,8 +24,14 @@ def test_settings() -> Settings:
 @pytest.fixture
 def client() -> Generator[TestClient, None, None]:
     """Create test client for FastAPI app"""
+    app.dependency_overrides[require_auth] = lambda: {
+        "uid": "test-user",
+        "email": "test@example.com",
+        "email_verified": True,
+    }
     with TestClient(app) as test_client:
         yield test_client
+    app.dependency_overrides.pop(require_auth, None)
 
 
 @pytest.fixture
