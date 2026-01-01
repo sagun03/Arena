@@ -3,15 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from arena.main import app
 from arena.models.idea import ExtractedStructure, Idea
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def client():
-    """Create test client"""
-    return TestClient(app)
 
 
 @pytest.mark.asyncio
