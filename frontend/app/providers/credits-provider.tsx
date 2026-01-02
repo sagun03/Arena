@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { useAuth } from './auth-provider'
 import { getCredits } from '@/lib/billing-service'
 
@@ -15,11 +16,12 @@ const CreditsContext = createContext<CreditsContextType | undefined>(undefined)
 
 export function CreditsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
+  const pathname = usePathname()
   const [credits, setCredits] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
 
   const refreshCredits = useCallback(async () => {
-    if (!user) {
+    if (!user || pathname?.startsWith('/auth')) {
       setCredits(null)
       return
     }
@@ -32,15 +34,15 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }, [user])
+  }, [user, pathname])
 
   useEffect(() => {
-    if (!user) {
+    if (!user || pathname?.startsWith('/auth')) {
       setCredits(null)
       return
     }
     refreshCredits()
-  }, [user, refreshCredits])
+  }, [user, pathname, refreshCredits])
 
   return (
     <CreditsContext.Provider value={{ credits, loading, refreshCredits, setCredits }}>
