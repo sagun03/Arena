@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
@@ -16,14 +17,20 @@ def get_firebase_app() -> firebase_admin.App:
     """Initialize or return the cached Firebase app using a service account."""
 
     base_dir = Path(__file__).resolve().parents[3]
-    cred_path = Path(settings.firebase_service_account_path)
+    raw_cred = settings.firebase_service_account_path
+    cred_path = Path(raw_cred)
     if not cred_path.is_absolute():
         cred_path = base_dir / cred_path
 
-    if not cred_path.exists():
-        raise FileNotFoundError(f"Firebase service account not found at: {cred_path}")
-
-    cred = credentials.Certificate(str(cred_path))
+    if cred_path.exists():
+        cred = credentials.Certificate(str(cred_path))
+    else:
+        # Allow secret JSON content to be injected via env var.
+        try:
+            cred_info = json.loads(raw_cred)
+        except json.JSONDecodeError as exc:
+            raise FileNotFoundError(f"Firebase service account not found at: {cred_path}") from exc
+        cred = credentials.Certificate(cred_info)
     options: Dict[str, Any] = {}
     if settings.firebase_project_id:
         options["projectId"] = settings.firebase_project_id
