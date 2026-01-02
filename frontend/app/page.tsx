@@ -13,6 +13,7 @@ import { Badge } from '@/components/badge'
 import { Section, Container } from '@/components/section'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Logo } from '@/components/logo'
+import { cn } from '@/lib/utils'
 import {
   CheckCircle,
   Target01,
@@ -267,7 +268,7 @@ export default function Home() {
           <div className="lg:hidden flex items-center space-x-2">
             <ThemeToggle />
             <button
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white shadow"
               onClick={() => setMobileNavOpen(open => !open)}
               aria-controls="mobile-landing-nav"
               aria-expanded={mobileNavOpen}
@@ -279,101 +280,118 @@ export default function Home() {
         </Container>
       </nav>
 
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" id="mobile-landing-nav">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileNavOpen(false)}
-            aria-hidden
-          />
-          <div className="relative h-full w-80 max-w-[80vw] bg-white dark:bg-gray-900 border-r border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Logo className="h-12 w-auto" />
-              </div>
-              <button
-                onClick={() => setMobileNavOpen(false)}
-                className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800"
-                aria-label="Close navigation"
-              >
-                <XClose className="h-4 w-4" />
-              </button>
+      <div
+        className={cn(
+          'fixed inset-0 z-50 lg:hidden transition-opacity duration-200',
+          mobileNavOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        )}
+        id="mobile-landing-nav"
+        aria-hidden={!mobileNavOpen}
+      >
+        <div
+          className={cn(
+            'absolute inset-0 bg-black/50 transition-opacity duration-200',
+            mobileNavOpen ? 'opacity-100' : 'opacity-0'
+          )}
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden
+        />
+        <div
+          className={cn(
+            'relative h-full w-80 max-w-[80vw] bg-white dark:bg-gray-900 border-r border-slate-200 dark:border-slate-800 p-6 shadow-2xl flex flex-col transition-transform duration-200 ease-out',
+            mobileNavOpen ? 'translate-x-0' : '-translate-x-full'
+          )}
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <Logo className="h-12 w-auto" />
             </div>
-            <div className="flex-1 space-y-2">
-              <a
-                href="#features"
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              className="h-10 w-10 inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white shadow"
+              aria-label="Close navigation"
+            >
+              <XClose className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 space-y-2">
+            <a
+              href="#features"
+              onClick={() => setMobileNavOpen(false)}
+              className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Features
+            </a>
+            <a
+              href="#how-it-works"
+              onClick={() => setMobileNavOpen(false)}
+              className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              How It Works
+            </a>
+            <a
+              href="#pricing"
+              onClick={() => setMobileNavOpen(false)}
+              className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+            >
+              Pricing
+            </a>
+            {user && (
+              <Link
+                href="/dashboard"
                 onClick={() => setMobileNavOpen(false)}
                 className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                Features
-              </a>
-              <a
-                href="#how-it-works"
-                onClick={() => setMobileNavOpen(false)}
-                className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                How It Works
-              </a>
-              <a
-                href="#pricing"
-                onClick={() => setMobileNavOpen(false)}
-                className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                Pricing
-              </a>
-              {user && (
-                <Link
-                  href="/dashboard"
-                  onClick={() => setMobileNavOpen(false)}
-                  className="block rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                Dashboard
+              </Link>
+            )}
+          </div>
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+            {loading ? (
+              <div className="text-sm text-slate-500 px-2">Loading...</div>
+            ) : user ? (
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Signed in</p>
+                <p className="text-sm text-slate-700 dark:text-slate-200">
+                  {user.displayName || user.email}
+                </p>
+                <Button
+                  onClick={() => {
+                    setMobileNavOpen(false)
+                    logout()
+                  }}
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
                 >
-                  Dashboard
-                </Link>
-              )}
-            </div>
-            <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-              {loading ? (
-                <div className="text-sm text-slate-500 px-2">Loading...</div>
-              ) : user ? (
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Signed in</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-200">
-                    {user.displayName || user.email}
-                  </p>
-                  <Button
-                    onClick={() => {
-                      setMobileNavOpen(false)
-                      logout()
-                    }}
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                  >
-                    Sign Out
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href="/auth/login" onClick={() => setMobileNavOpen(false)}>
-                      Sign In
-                    </Link>
-                  </Button>
-                  <Button asChild size="sm">
-                    <Link href="/auth/signup" onClick={() => setMobileNavOpen(false)}>
-                      Sign Up
-                    </Link>
-                  </Button>
-                </div>
-              )}
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Theme</span>
-                <ThemeToggle />
+                  Sign Out
+                </Button>
               </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Button asChild variant="secondary" size="sm">
+                  <Link href="/auth/login" onClick={() => setMobileNavOpen(false)}>
+                    Sign In
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                >
+                  <Link href="/auth/signup" onClick={() => setMobileNavOpen(false)}>
+                    Sign Up
+                  </Link>
+                </Button>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs uppercase tracking-[0.14em] text-slate-500">Theme</span>
+              <ThemeToggle />
             </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Hero Section */}
       <Section className="relative overflow-hidden pt-32 pb-16 bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900">
@@ -405,15 +423,15 @@ export default function Home() {
           `}</style>
           <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-6 leading-tight">
             Stop Wasting Time on&nbsp;
-            <span className="relative inline-block align-bottom">
-              <span className="invisible whitespace-nowrap">
+            <span className="relative block w-full align-bottom text-center sm:inline-block sm:w-auto sm:text-left">
+              <span className="invisible block w-full sm:inline-block sm:w-auto sm:whitespace-nowrap">
                 {rotatingWords.reduce((longest, word) =>
                   word.length > longest.length ? word : longest
                 )}
               </span>
               <span
                 key={rotatingWords[wordIndex]}
-                className="word-cycle absolute left-0 top-0 whitespace-nowrap bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent"
+                className="word-cycle absolute inset-0 flex items-start justify-center bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] bg-clip-text text-transparent sm:inset-auto sm:left-0 sm:top-0 sm:block sm:whitespace-nowrap"
               >
                 {rotatingWords[wordIndex]}
               </span>
