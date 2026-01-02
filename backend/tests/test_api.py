@@ -1,6 +1,6 @@
 """Integration tests for API endpoints"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from arena.models.idea import ExtractedStructure, Idea
@@ -19,7 +19,11 @@ async def test_validate_idea_endpoint(client):
     """Test POST /arena/validate endpoint"""
     with patch("arena.routers.arena.extract_idea_from_prd") as mock_extract, patch(
         "arena.routers.arena.save_debate_state"
-    ) as mock_save, patch("arena.routers.arena.execute_debate") as mock_execute:
+    ) as mock_save, patch("arena.routers.arena.execute_debate") as mock_execute, patch(
+        "arena.routers.arena.consume_credits"
+    ) as mock_consume, patch(
+        "arena.routers.arena.get_firestore_client"
+    ) as mock_firestore:
         # Mock idea extraction
         mock_idea = Idea(
             original_prd_text="Test PRD",
@@ -28,6 +32,14 @@ async def test_validate_idea_endpoint(client):
         mock_extract.return_value = mock_idea
         mock_save.return_value = AsyncMock()
         mock_execute.return_value = AsyncMock()
+        mock_consume.return_value = None
+
+        mock_db = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_doc.to_dict.return_value = {}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_firestore.return_value = mock_db
 
         response = client.post(
             "/arena/validate",
@@ -46,6 +58,7 @@ async def test_get_debate_endpoint(client):
     with patch("arena.routers.arena.get_debate_state") as mock_get:
         mock_state = {
             "debate_id": "test-123",
+            "user_id": "test-user",
             "current_round": 2,
             "round_status": "in_progress",
             "transcript": [],
@@ -78,6 +91,7 @@ async def test_get_verdict_endpoint(client):
     with patch("arena.routers.arena.get_debate_state") as mock_get:
         mock_state = {
             "debate_id": "test-123",
+            "user_id": "test-user",
             "round_status": "completed",
             "verdict": {
                 "decision": "Proceed",
@@ -111,6 +125,7 @@ async def test_get_verdict_pending(client):
     with patch("arena.routers.arena.get_debate_state") as mock_get:
         mock_state = {
             "debate_id": "test-123",
+            "user_id": "test-user",
             "round_status": "in_progress",
         }
         mock_get.return_value = mock_state
@@ -143,6 +158,7 @@ async def test_get_debate_graph_progress(client):
     with patch("arena.routers.arena.get_debate_state") as mock_get:
         mock_state = {
             "debate_id": "test-123",
+            "user_id": "test-user",
             "current_round": 2,
             "round_status": "in_progress",
         }

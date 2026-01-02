@@ -1,6 +1,6 @@
 """Integration tests for API endpoints"""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from arena.llm.prd_extractor import extract_idea_from_prd
@@ -33,7 +33,11 @@ async def test_idea_validation_endpoint(client):
 
     with patch("arena.routers.arena.extract_idea_from_prd") as mock_extract, patch(
         "arena.routers.arena.save_debate_state"
-    ) as mock_save, patch("arena.routers.arena.execute_debate") as mock_execute:
+    ) as mock_save, patch("arena.routers.arena.execute_debate") as mock_execute, patch(
+        "arena.routers.arena.consume_credits"
+    ) as mock_consume, patch(
+        "arena.routers.arena.get_firestore_client"
+    ) as mock_firestore:
         mock_idea = Idea(
             original_prd_text=prd_text,
             extracted_structure=ExtractedStructure(metadata={"title": "Expense Tracker"}),
@@ -41,6 +45,14 @@ async def test_idea_validation_endpoint(client):
         mock_extract.return_value = mock_idea
         mock_save.return_value = AsyncMock()
         mock_execute.return_value = AsyncMock()
+        mock_consume.return_value = None
+
+        mock_db = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_doc.to_dict.return_value = {}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_firestore.return_value = mock_db
 
         response = client.post("/arena/validate", json={"prd_text": prd_text})
 
