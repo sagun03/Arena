@@ -14,7 +14,7 @@ import {
   LayoutGrid01,
   Check,
   Stars02,
-  Menu01,
+  LayoutLeft,
   XClose,
   ArrowLeft,
   ArrowRight,
@@ -191,10 +191,12 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
           <div className="lg:hidden px-4 pt-4 flex items-center justify-between">
             <button
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-gray-900"
-              onClick={() => setMobileOpen(true)}
+              onClick={() => setMobileOpen(open => !open)}
+              aria-controls="mobile-sidebar"
+              aria-expanded={mobileOpen}
               aria-label="Open navigation"
             >
-              <Menu01 className="h-4 w-4" />
+              <LayoutLeft className="h-4 w-4" />
             </button>
             <Link href="/" className="flex items-center gap-2">
               <Logo className="h-12 w-auto" markOnly />
@@ -206,7 +208,7 @@ export function AppShell({ children, onValidateClick }: AppShellProps) {
       </div>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden" id="mobile-sidebar">
           <div
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
