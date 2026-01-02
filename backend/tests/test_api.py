@@ -88,7 +88,9 @@ async def test_get_debate_not_found(client):
 @pytest.mark.asyncio
 async def test_get_verdict_endpoint(client):
     """Test GET /arena/debate/{debate_id}/verdict endpoint"""
-    with patch("arena.routers.arena.get_debate_state") as mock_get:
+    with patch("arena.routers.arena.get_debate_state") as mock_get, patch(
+        "arena.routers.arena.get_firestore_client"
+    ) as mock_firestore:
         mock_state = {
             "debate_id": "test-123",
             "user_id": "test-user",
@@ -110,6 +112,12 @@ async def test_get_verdict_endpoint(client):
             },
         }
         mock_get.return_value = mock_state
+        mock_db = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_doc.to_dict.return_value = {}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_firestore.return_value = mock_db
 
         response = client.get("/arena/debate/test-123/verdict")
 
@@ -122,13 +130,21 @@ async def test_get_verdict_endpoint(client):
 @pytest.mark.asyncio
 async def test_get_verdict_pending(client):
     """Test GET /arena/debate/{debate_id}/verdict with pending debate"""
-    with patch("arena.routers.arena.get_debate_state") as mock_get:
+    with patch("arena.routers.arena.get_debate_state") as mock_get, patch(
+        "arena.routers.arena.get_firestore_client"
+    ) as mock_firestore:
         mock_state = {
             "debate_id": "test-123",
             "user_id": "test-user",
             "round_status": "in_progress",
         }
         mock_get.return_value = mock_state
+        mock_db = MagicMock()
+        mock_doc = MagicMock()
+        mock_doc.exists = False
+        mock_doc.to_dict.return_value = {}
+        mock_db.collection.return_value.document.return_value.get.return_value = mock_doc
+        mock_firestore.return_value = mock_db
 
         response = client.get("/arena/debate/test-123/verdict")
 
