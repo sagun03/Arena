@@ -27,6 +27,7 @@ ENV REACT_APP_RECAPTCHA_V3_SITE_KEY=$REACT_APP_RECAPTCHA_V3_SITE_KEY
 ENV REACT_APP_APPCHECK_DEBUG_TOKEN=$REACT_APP_APPCHECK_DEBUG_TOKEN
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p /app/public
 RUN npm run build
 
 FROM node:20-alpine AS runner
