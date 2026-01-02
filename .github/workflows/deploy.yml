@@ -199,14 +199,14 @@ jobs:
       - name: Deploy backend (dev)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_DEV }}" \
-            --image "${{ needs.build_and_push.outputs.backend_image }}" \
+            --image "${{ secrets.GAR_REGION_DEV }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID_DEV }}/${{ secrets.GAR_REPO_DEV }}/ideaaudit-backend:dev" \
             --region "${{ secrets.GCP_REGION_DEV }}" \
             --project "${{ secrets.GCP_PROJECT_ID_DEV }}" \
             --allow-unauthenticated
       - name: Deploy frontend (dev)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_DEV }}" \
-            --image "${{ needs.build_and_push.outputs.frontend_image }}" \
+            --image "${{ secrets.GAR_REGION_DEV }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID_DEV }}/${{ secrets.GAR_REPO_DEV }}/ideaaudit-frontend:dev" \
             --region "${{ secrets.GCP_REGION_DEV }}" \
             --project "${{ secrets.GCP_PROJECT_ID_DEV }}" \
             --allow-unauthenticated
@@ -250,14 +250,14 @@ jobs:
       - name: Deploy backend (prod)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_BACKEND_SERVICE_PROD }}" \
-            --image "${{ needs.build_and_push.outputs.backend_image }}" \
+            --image "${{ secrets.GAR_REGION_PROD }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID_PROD }}/${{ secrets.GAR_REPO_PROD }}/ideaaudit-backend:prod" \
             --region "${{ secrets.GCP_REGION_PROD }}" \
             --project "${{ secrets.GCP_PROJECT_ID_PROD }}" \
             --allow-unauthenticated
       - name: Deploy frontend (prod)
         run: |
           gcloud run deploy "${{ secrets.CLOUD_RUN_FRONTEND_SERVICE_PROD }}" \
-            --image "${{ needs.build_and_push.outputs.frontend_image }}" \
+            --image "${{ secrets.GAR_REGION_PROD }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID_PROD }}/${{ secrets.GAR_REPO_PROD }}/ideaaudit-frontend:prod" \
             --region "${{ secrets.GCP_REGION_PROD }}" \
             --project "${{ secrets.GCP_PROJECT_ID_PROD }}" \
             --allow-unauthenticated
