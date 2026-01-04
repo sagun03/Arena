@@ -19,6 +19,17 @@ type DebateState = {
   last_updated?: string | null
   error?: string | null
   idea_title?: string
+  evidence_tags?: Array<{
+    text: string
+    type: string
+    agent: string
+    round: number
+    sources?: Array<{
+      title: string
+      url: string
+      snippet?: string | null
+    }>
+  }>
 }
 
 const roundLabels: Record<number, string> = {
@@ -115,6 +126,11 @@ export default function DebatePage() {
         .filter(round => round > 0)
         .sort((a, b) => a - b),
     [groupedTranscript]
+  )
+
+  const groundedEvidence = useMemo(
+    () => (state?.evidence_tags || []).filter(tag => (tag.sources || []).length > 0),
+    [state?.evidence_tags]
   )
 
   const normalizeMarkdown = (text: string) =>
@@ -617,6 +633,53 @@ export default function DebatePage() {
                     )}
                   </div>
                 </div>
+
+                {groundedEvidence.length > 0 && (
+                  <div className="mt-10">
+                    <h3 className="font-bold text-lg mb-4 text-gray-900 dark:text-white">
+                      Grounded Evidence
+                    </h3>
+                    <div className="space-y-5">
+                      {groundedEvidence.map((tag, index) => (
+                        <Card key={`${tag.agent}-${tag.round}-${index}`} className="shadow-sm">
+                          <CardHeader>
+                            <CardTitle className="text-base">{tag.text}</CardTitle>
+                            <CardDescription className="flex flex-wrap gap-2 text-xs">
+                              <Badge variant="secondary" className="uppercase tracking-[0.2em]">
+                                {tag.type}
+                              </Badge>
+                              <span>
+                                {tag.agent} · Round {tag.round}
+                              </span>
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {(tag.sources || []).map((source, sourceIndex) => (
+                              <div
+                                key={`${tag.agent}-${index}-${sourceIndex}`}
+                                className="space-y-1"
+                              >
+                                <a
+                                  className="text-sm font-semibold text-slate-900 dark:text-white underline decoration-amber-400 underline-offset-4"
+                                  href={source.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  {source.title || source.url}
+                                </a>
+                                {source.snippet && (
+                                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                                    {source.snippet}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Raw state for debugging/visibility */}
                 {showDebug && (

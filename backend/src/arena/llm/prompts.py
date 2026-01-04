@@ -19,10 +19,14 @@ Format evidence tags in your response as JSON:
         {{
             "text": "claim text here",
             "type": "Verified|Assumption|NeedsValidation",
-            "reasoning": "why this classification"
+            "reasoning": "why this classification",
+            "sources": [0, 1]
         }}
     ]
 }}
+
+If grounded sources are provided, include `sources` as a list of source indexes
+that support the claim. Otherwise omit `sources`.
 """
 
 # ============================================================================
@@ -400,6 +404,9 @@ Your role: Analyze market saturation, competition, and market dynamics.
 **Previous Round Context:**
 {previous_context}
 
+**Grounded Sources (use these when citing evidence):**
+{grounded_sources}
+
 **Your Task:**
 Analyze market and competition:
 1. **Market Size**: Is the market size claim realistic?
@@ -408,6 +415,7 @@ Analyze market and competition:
 4. **Barriers to Entry**: What barriers exist for new entrants?
 5. **Market Dynamics**: How is the market evolving?
 6. **Competitive Advantage**: What's the real differentiation?
+7. **Competitor Moat Analysis**: Why top competitors are hard to beat (grounded).
 
 **Response Format (JSON):**
 {{
@@ -443,11 +451,21 @@ Analyze market and competition:
         "reasoning": "Why"
     }},
     "market_risks": ["Risk 1", "Risk 2", ...],
+    "moat_analysis": [
+        {{
+            "competitor": "Competitor name",
+            "moat": "Why they're hard to beat",
+            "evidence": "What supports this moat",
+            "sources": [0, 2]
+        }},
+        ...
+    ],
     "claims": [
         {{
             "text": "claim text",
             "type": "Verified|Assumption|NeedsValidation",
-            "reasoning": "classification reasoning"
+            "reasoning": "classification reasoning",
+            "sources": [0, 2]
         }}
     ]
 }}
@@ -457,6 +475,7 @@ Analyze market and competition:
 - Question market size claims
 - Identify real barriers to entry
 - Tag all claims with evidence types
+- Use grounded sources when available and cite with `sources` indexes
 """
 
 BUILDER_PROMPT = """

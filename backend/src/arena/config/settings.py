@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str
 
+    # Google Custom Search grounding
+    enable_grounded_search: bool = False
+    google_search_api_key: str | None = None
+    google_search_engine_id: str | None = None
+
     # ChromaDB
     chromadb_path: str = "./chroma_db"
 

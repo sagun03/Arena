@@ -43,6 +43,7 @@ class BaseWorkerAgent(BaseAgent):
         round_number: int = 2,
         attacks: Optional[dict] = None,
         historical_context: Optional[str] = None,
+        grounded_sources: Optional[list[dict]] = None,
     ) -> dict:
         """
         Execute worker agent task.
@@ -65,6 +66,11 @@ class BaseWorkerAgent(BaseAgent):
         previous_context_str = json.dumps(previous_context, indent=2) if previous_context else "{}"
         attacks_str = json.dumps(attacks, indent=2) if attacks else "{}"
         historical_context_str = historical_context or ""
+        grounded_sources_list = grounded_sources or []
+        grounded_sources_prompt = [
+            {"index": idx, **source} for idx, source in enumerate(grounded_sources_list)
+        ]
+        grounded_sources_str = json.dumps(grounded_sources_prompt, indent=2)
 
         # Format prompt (only include args used by this agent's template)
         prompt = self.format_prompt(
@@ -74,12 +80,13 @@ class BaseWorkerAgent(BaseAgent):
             previous_context=previous_context_str,
             attacks=attacks_str,  # Added for builder agent
             historical_context=historical_context_str,
+            grounded_sources=grounded_sources_str,
         )
 
         # Invoke LLM
         response = await self.invoke(prompt)
 
         # Process response (parse, extract evidence, store)
-        result = await self.process_response(response, round_number)
+        result = await self.process_response(response, round_number, grounded_sources_list)
 
         return result

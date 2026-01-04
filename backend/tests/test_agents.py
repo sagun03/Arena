@@ -56,14 +56,18 @@ class TestBaseAgent:
 
         response_data = {
             "claims": [
-                {"text": "Test claim", "type": "evidence"},
+                {"text": "Test claim", "type": "evidence", "sources": [0]},
                 {"text": "Test assumption", "type": "assumption"},
             ]
         }
+        source_lookup = [{"title": "Source A", "url": "https://example.com", "snippet": "Snippet"}]
 
-        tags = agent.extract_evidence_tags(response_data, round_number=1)
+        tags = agent.extract_evidence_tags(
+            response_data, round_number=1, source_lookup=source_lookup
+        )
         assert len(tags) == 2
         assert tags[0].text == "Test claim"
+        assert tags[0].sources[0].title == "Source A"
         assert tags[1].text == "Test assumption"
 
 

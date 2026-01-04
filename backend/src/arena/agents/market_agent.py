@@ -48,6 +48,7 @@ class MarketAgent(BaseWorkerAgent):
         extracted_structure: Dict[str, Any],
         previous_context: Optional[Dict[str, Any]] = None,
         historical_context: Optional[str] = None,
+        grounded_sources: Optional[list[dict]] = None,
     ) -> Dict[str, Any]:
         """
         Analyze market and competition.
@@ -67,6 +68,7 @@ class MarketAgent(BaseWorkerAgent):
             previous_context=previous_context,
             round_number=2,
             historical_context=historical_context,
+            grounded_sources=grounded_sources,
         )
 
         return result

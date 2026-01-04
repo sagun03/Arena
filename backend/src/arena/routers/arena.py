@@ -20,9 +20,11 @@ from arena.billing.credits import (
     consume_credits,
     grant_credits,
 )
+from arena.grounding.google_search import search_google
 from arena.llm.gemini_client import get_gemini_llm
 from arena.llm.prd_extractor import extract_idea_from_prd
 from arena.models.decision_evidence import DecisionEvidence
+from arena.models.evidence import EvidenceTag
 from arena.models.idea import ExtractedStructure, Idea, Section
 from arena.models.verdict import Verdict
 from arena.monitoring.metrics import logger
@@ -45,8 +47,26 @@ SHORT_MODE_MIN_LINES = 2
 SHORT_MODE_MAX_LINES = 5
 
 
+def _build_grounding_query(idea: Idea, extracted_structure: dict) -> str:
+    metadata = (
+        extracted_structure.get("metadata", {}) if isinstance(extracted_structure, dict) else {}
+    )
+    key_facts = (
+        extracted_structure.get("key_facts", {}) if isinstance(extracted_structure, dict) else {}
+    )
+    title = metadata.get("title") or key_facts.get("Title")
+    if not title:
+        first_line = idea.original_prd_text.splitlines()[0] if idea.original_prd_text else ""
+        title = first_line[:120]
+    return f"{title} competitors alternatives market"
+
+
 class QuickRoastLimitError(RuntimeError):
     """Raised when daily quick roast limit is exceeded."""
+
+
+def _dump_evidence_tags(tags: list[EvidenceTag]) -> list[dict]:
+    return [tag.model_dump() if hasattr(tag, "model_dump") else tag for tag in tags]
 
 
 def _enforce_quick_roast_limit(decoded: Dict[str, Any]) -> None:
@@ -1590,11 +1610,14 @@ async def execute_debate(debate_id: str, prd_text: str, mode: str = "long") -> N
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
+        grounding_query = _build_grounding_query(idea, extracted_structure)
+        grounded_sources = search_google(grounding_query)
         market_result = await market.analyze_market(
             idea_text=idea.original_prd_text,
             extracted_structure=extracted_structure,
             previous_context=clarification,
             historical_context=historical_context_text,
+            grounded_sources=grounded_sources,
         )
         _, market_metadata = format_agent_response(market_result, "Market")
         await append_event(
@@ -1618,6 +1641,9 @@ async def execute_debate(debate_id: str, prd_text: str, mode: str = "long") -> N
             + customer_result.get("evidence_tags", [])
             + market_result.get("evidence_tags", [])
         )
+        state = await get_debate_state(debate_id) or {}
+        state["evidence_tags"] = _dump_evidence_tags(round2_evidence)
+        await save_debate_state(debate_id, state)
 
         # Optional: Judge quality gate for round 2
         qg2 = await judge.evaluate_quality_gate(
@@ -1779,15 +1805,19 @@ async def execute_debate(debate_id: str, prd_text: str, mode: str = "long") -> N
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
+        all_evidence_tags = (
+            round2_evidence + defense_result.get("evidence_tags", []) + cross_exam_evidence
+        )
+        state = await get_debate_state(debate_id) or {}
+        state["evidence_tags"] = _dump_evidence_tags(all_evidence_tags)
+        await save_debate_state(debate_id, state)
         verdict = await judge.generate_verdict(
             idea=idea,
             clarification=clarification.get("raw_response", ""),
             attacks=attacks,
             defense=defense_result.get("response", ""),
             cross_examination=cross_examination,
-            evidence_tags=round2_evidence
-            + defense_result.get("evidence_tags", [])
-            + cross_exam_evidence,
+            evidence_tags=all_evidence_tags,
         )
 
         # Append final verdict

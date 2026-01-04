@@ -125,7 +125,10 @@ class BaseAgent:
             return {"response": content, "raw_response": response, "parsed_as": "plain_text"}
 
     def extract_evidence_tags(
-        self, response_data: Dict[str, Any], round_number: int
+        self,
+        response_data: Dict[str, Any],
+        round_number: int,
+        source_lookup: Optional[List[Dict[str, Any]]] = None,
     ) -> List[EvidenceTag]:
         """
         Extract evidence tags from agent response.
@@ -145,12 +148,22 @@ class BaseAgent:
                 if isinstance(claim, dict) and "text" in claim and "type" in claim:
                     try:
                         evidence_type = EvidenceType(claim["type"])
+                        sources = []
+                        if source_lookup and isinstance(claim.get("sources"), list):
+                            for index in claim["sources"]:
+                                if (
+                                    isinstance(index, int)
+                                    and 0 <= index < len(source_lookup)
+                                    and isinstance(source_lookup[index], dict)
+                                ):
+                                    sources.append(source_lookup[index])
                         evidence_tags.append(
                             EvidenceTag(
                                 text=claim["text"],
                                 type=evidence_type,
                                 agent=self.name,
                                 round=round_number,
+                                sources=sources,
                             )
                         )
                     except ValueError:
@@ -184,7 +197,12 @@ class BaseAgent:
 
         return template.format(**kwargs)
 
-    async def process_response(self, response: str, round_number: int) -> Dict[str, Any]:
+    async def process_response(
+        self,
+        response: str,
+        round_number: int,
+        source_lookup: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         """
         Process agent response: parse JSON and extract evidence tags.
 
@@ -199,7 +217,7 @@ class BaseAgent:
         parsed_response = self.parse_json_response(response)
 
         # Extract evidence tags
-        evidence_tags = self.extract_evidence_tags(parsed_response, round_number)
+        evidence_tags = self.extract_evidence_tags(parsed_response, round_number, source_lookup)
 
         return {
             "response": parsed_response,
