@@ -177,7 +177,16 @@ Generate a comprehensive verdict that includes:
    - What evidence supports it?
    - What are the key risks?
 
-7. **Confidence**: How confident are you in this verdict? (0.0-1.0)
+7. **Pivot Ideas**: Provide 3 concrete pivot directions
+   - Each pivot must be distinct (customer, channel, or business model shift)
+   - Keep each pivot to a single, actionable sentence
+
+8. **Investor Readiness**: Rate how likely this pitch gets a VC meeting
+   - Score 0-100
+   - Verdict label: "NotReady", "Warm", "InvestorReady"
+   - Provide 3-5 bullet reasons for the score
+
+9. **Confidence**: How confident are you in this verdict? (0.0-1.0)
 
 **Response Format (JSON):**
 {{
@@ -207,6 +216,16 @@ Generate a comprehensive verdict that includes:
         }},
         ...
     ],
+    "pivot_ideas": [
+        "Pivot idea 1",
+        "Pivot idea 2",
+        "Pivot idea 3"
+    ],
+    "investor_readiness": {{
+        "score": 0-100,
+        "verdict": "NotReady|Warm|InvestorReady",
+        "reasons": ["Reason 1", "Reason 2", "Reason 3"]
+    }},
     "reasoning": "Detailed reasoning paragraph",
     "confidence": 0.0-1.0
 }}

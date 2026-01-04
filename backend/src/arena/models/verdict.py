@@ -71,6 +71,30 @@ class TestPlanItem(BaseModel):
         }
 
 
+class InvestorReadiness(BaseModel):
+    """How investable the pitch is right now."""
+
+    score: int = Field(..., ge=0, le=100, description="Investor readiness score (0-100)")
+    verdict: str = Field(
+        ...,
+        description="Short label: 'NotReady', 'Warm', or 'InvestorReady'",
+    )
+    reasons: List[str] = Field(..., max_length=5, description="Top reasons driving the score")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "score": 32,
+                "verdict": "NotReady",
+                "reasons": [
+                    "No clear distribution channel",
+                    "Weak differentiation in a saturated market",
+                    "Unvalidated willingness to pay",
+                ],
+            }
+        }
+
+
 class Verdict(BaseModel):
     """Final verdict from the debate"""
 
@@ -92,6 +116,17 @@ class Verdict(BaseModel):
     )
     test_plan: List[TestPlanItem] = Field(
         ..., max_length=7, description="7-day validation test plan"
+    )
+    pivot_ideas: List[str] = Field(
+        default_factory=list, max_length=3, description="Three pivot directions to consider"
+    )
+    investor_readiness: InvestorReadiness = Field(
+        default_factory=lambda: InvestorReadiness(
+            score=0,
+            verdict="NotReady",
+            reasons=["Investor readiness not assessed."],
+        ),
+        description="Investor readiness assessment",
     )
     reasoning: str = Field(..., description="Detailed reasoning behind the verdict decision")
     confidence: float = Field(
@@ -128,6 +163,20 @@ class Verdict(BaseModel):
                         "success_criteria": "3+ confirm problem exists",
                     }
                 ],
+                "pivot_ideas": [
+                    "Target HR departments with a compliance-first wedge",
+                    "Bundle with ATS integrations for distribution",
+                    "Pivot to internal talent mobility tooling",
+                ],
+                "investor_readiness": {
+                    "score": 32,
+                    "verdict": "NotReady",
+                    "reasons": [
+                        "No clear distribution channel",
+                        "Weak differentiation",
+                        "Pricing not validated",
+                    ],
+                },
                 "reasoning": "The idea has potential but needs significant pivoting...",
                 "confidence": 0.75,
             }

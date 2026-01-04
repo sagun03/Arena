@@ -35,12 +35,20 @@ type TestPlanItem = {
   success_criteria: string
 }
 
+type InvestorReadiness = {
+  score: number
+  verdict: string
+  reasons?: string[]
+}
+
 type Verdict = {
   decision: string
   scorecard?: Scorecard
   kill_shots?: KillShot[]
   assumptions?: string[]
   test_plan?: TestPlanItem[]
+  pivot_ideas?: string[]
+  investor_readiness?: InvestorReadiness
   reasoning?: string
   confidence?: number
 }
@@ -503,6 +511,60 @@ export default function VerdictPage() {
                         <Badge variant="warning" className="text-xs">
                           {verdict.kill_shots?.length || 0} Critical Issues Found
                         </Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-5 shadow-sm">
+                        <h4 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                          <span className="text-xl">🧭</span> Pivot Generator
+                        </h4>
+                        <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                          {(verdict.pivot_ideas || []).length ? (
+                            verdict.pivot_ideas?.map((pivot, idx) => (
+                              <li
+                                key={idx}
+                                className="rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-800/60 px-3 py-2"
+                              >
+                                {pivot}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="text-slate-500">No pivots generated yet.</li>
+                          )}
+                        </ul>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-900/20 p-5 shadow-sm">
+                        <h4 className="font-bold text-emerald-900 dark:text-emerald-100 mb-3 flex items-center gap-2">
+                          <span className="text-xl">💼</span> Investor Readiness
+                        </h4>
+                        <div className="flex items-center gap-4 mb-3">
+                          <div className="text-3xl font-black text-emerald-600 dark:text-emerald-300">
+                            {verdict.investor_readiness?.score ?? 0}
+                          </div>
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+                              {verdict.investor_readiness?.verdict || 'NotReady'}
+                            </p>
+                            <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                              Likelihood of a VC meeting today.
+                            </p>
+                          </div>
+                        </div>
+                        <ul className="space-y-2 text-sm text-emerald-900 dark:text-emerald-100">
+                          {(verdict.investor_readiness?.reasons || []).map((reason, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
+                              <span>{reason}</span>
+                            </li>
+                          ))}
+                          {!verdict.investor_readiness?.reasons?.length && (
+                            <li className="text-emerald-700/70 dark:text-emerald-300/70">
+                              No readiness notes available.
+                            </li>
+                          )}
+                        </ul>
                       </div>
                     </div>
 

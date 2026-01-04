@@ -56,9 +56,15 @@ function normalizeVerdict(item: any): VerdictRecord {
   }
 }
 
-export async function startValidation(prdText: string): Promise<ValidationResponse> {
+export type ValidationMode = 'short' | 'long'
+
+export async function startValidation(
+  prdText: string,
+  mode: ValidationMode = 'long'
+): Promise<ValidationResponse> {
   const { data } = await apiClient.post<ValidationResponse>('/arena/validate', {
     prd_text: prdText.trim(),
+    mode,
   })
   return data
 }

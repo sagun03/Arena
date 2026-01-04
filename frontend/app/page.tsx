@@ -17,9 +17,7 @@ import { cn } from '@/lib/utils'
 import {
   CheckCircle,
   Target01,
-  Zap,
   Users01,
-  TrendUp01,
   Database01,
   MessageTextCircle01,
   FileShield01,
@@ -30,6 +28,13 @@ import {
 } from '@untitledui/icons'
 
 const PRD_STORAGE_KEY = 'ideaaudit_pending_prd'
+const SHORT_MODE_MIN_LINES = 2
+const SHORT_MODE_MAX_LINES = 5
+const SHORT_MODE_MAX_CHARS = 400
+const creditCostByMode = {
+  short: 0,
+  long: 2,
+} as const
 
 interface RecentVerdictItem {
   id: string
@@ -53,6 +58,7 @@ export default function Home() {
     return map
   }, [pricing])
   const [prdText, setPrdText] = useState('')
+  const [validationMode, setValidationMode] = useState<'short' | 'long'>('short')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successDebateId, setSuccessDebateId] = useState<string | null>(null)
   const [successIdeaTitle, setSuccessIdeaTitle] = useState<string | null>(null)
@@ -62,6 +68,29 @@ export default function Home() {
   const rotatingWords = ['Bad Ideas', 'Weak Concepts', 'Shaky Pitches', 'Dead-End Plans']
   const [wordIndex, setWordIndex] = useState(0)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  const prdLineCount = useMemo(() => {
+    return prdText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean).length
+  }, [prdText])
+
+  const shortModeError = useMemo(() => {
+    if (validationMode !== 'short') return null
+    if (prdText.length > SHORT_MODE_MAX_CHARS) {
+      return `Keep it under ${SHORT_MODE_MAX_CHARS} characters for Short mode.`
+    }
+    if (prdLineCount < SHORT_MODE_MIN_LINES) {
+      return `Add at least ${SHORT_MODE_MIN_LINES} lines for Short mode.`
+    }
+    if (prdLineCount > SHORT_MODE_MAX_LINES) {
+      return `Limit to ${SHORT_MODE_MAX_LINES} lines for Short mode.`
+    }
+    return null
+  }, [prdText, prdLineCount, validationMode])
+
+  const creditCost = creditCostByMode[validationMode]
 
   // Restore PRD text from session storage after login
   useEffect(() => {
@@ -123,12 +152,18 @@ export default function Home() {
       return
     }
 
+    if (shortModeError) {
+      setErrorMessage(shortModeError)
+      toast.error(shortModeError)
+      return
+    }
+
     setIsSubmitting(true)
     setErrorMessage(null)
     setSuccessDebateId(null)
     setSuccessIdeaTitle(null)
     try {
-      const data = await startValidation(prdText)
+      const data = await startValidation(prdText, validationMode)
       setSuccessDebateId(data.debate_id ?? null)
       setSuccessIdeaTitle(data.idea_title ?? null)
       toast.success('Validation started. Redirect buttons enabled.')
@@ -607,24 +642,25 @@ export default function Home() {
 
             <Card className="border border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-2xl transition-all">
               <CardHeader>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                  <TrendUp01 className="w-6 h-6 text-green-600" />
+                <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4 text-2xl">
+                  🧭
                 </div>
-                <CardTitle>7-Day Test Plan</CardTitle>
+                <CardTitle>Pivot Generator</CardTitle>
                 <CardDescription>
-                  Get actionable validation experiments based on identified assumptions and risks.
+                  If the idea fails, we don’t stop there. You get three concrete pivot paths to
+                  rescue it.
                 </CardDescription>
               </CardHeader>
             </Card>
 
             <Card className="border border-slate-200 dark:border-slate-800 shadow-lg hover:shadow-2xl transition-all">
               <CardHeader>
-                <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4">
-                  <Zap className="w-6 h-6 text-yellow-600" />
+                <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mb-4 text-2xl">
+                  💼
                 </div>
-                <CardTitle>Instant Results</CardTitle>
+                <CardTitle>Investor Readiness Score</CardTitle>
                 <CardDescription>
-                  Upload your idea, get a comprehensive analysis in under 2 minutes. No waiting.
+                  A VC-style scorecard that grades how likely you are to get a meeting today.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -634,10 +670,9 @@ export default function Home() {
                 <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
                   <MessageTextCircle01 className="w-6 h-6 text-indigo-600" />
                 </div>
-                <CardTitle>Debate Transcript</CardTitle>
+                <CardTitle>Boardroom Transcript</CardTitle>
                 <CardDescription>
-                  View the full agent debate transcript. Understand exactly why your idea passed or
-                  failed.
+                  Share a polished transcript that reads like a real investment committee review.
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -811,13 +846,61 @@ export default function Home() {
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                   📝 Business Idea Description
                 </label>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                      Choose validation mode
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Short runs 2 rounds and is free (1/day). Long runs 5 rounds (2 credits).
+                    </p>
+                  </div>
+                  <div className="flex rounded-full border border-gray-200 dark:border-gray-600 bg-white/80 dark:bg-gray-700/60 p-1">
+                    <Button
+                      size="sm"
+                      variant={validationMode === 'short' ? 'primary' : 'secondary'}
+                      className={
+                        validationMode === 'short'
+                          ? 'rounded-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]'
+                          : 'rounded-full'
+                      }
+                      onClick={() => setValidationMode('short')}
+                    >
+                      Short
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={validationMode === 'long' ? 'primary' : 'secondary'}
+                      className={
+                        validationMode === 'long'
+                          ? 'rounded-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]'
+                          : 'rounded-full'
+                      }
+                      onClick={() => setValidationMode('long')}
+                    >
+                      Long
+                    </Button>
+                  </div>
+                </div>
                 <textarea
-                  placeholder="Describe your startup idea in 2-3 sentences..."
+                  placeholder={
+                    validationMode === 'short'
+                      ? 'Describe your idea in 2–5 lines (user, problem, value, why now).'
+                      : 'Paste your PRD or full spec here. Include user, problem, goals, metrics.'
+                  }
                   value={prdText}
                   onChange={e => setPrdText(e.target.value)}
-                  rows={6}
+                  rows={validationMode === 'short' ? 6 : 10}
                   className="w-full h-32 bg-white/70 dark:bg-gray-700/70 backdrop-blur-sm border-2 border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white placeholder:text-gray-500 dark:placeholder:text-gray-400 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-y px-4 py-3"
                 />
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <span>
+                    {validationMode === 'short'
+                      ? `Short mode: ${prdLineCount}/${SHORT_MODE_MAX_LINES} lines • ${prdText.length}/${SHORT_MODE_MAX_CHARS} chars • 1 free/day`
+                      : 'Long mode: no hard limit.'}
+                  </span>
+                  {shortModeError && <span className="text-red-500">{shortModeError}</span>}
+                </div>
               </div>
 
               {/* Backend only needs PRD text right now */}
@@ -825,19 +908,23 @@ export default function Home() {
               <div className="flex justify-center pt-4">
                 <Button
                   onClick={handleValidate}
-                  disabled={isSubmitting || !prdText.trim()}
+                  disabled={isSubmitting || !prdText.trim() || Boolean(shortModeError)}
                   className="group px-12 py-4 text-lg font-semibold bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white border-0 shadow-xl hover:shadow-2xl transform hover:scale-105 transition-all duration-300 rounded-xl disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span className="mr-3">{isSubmitting ? '⏳' : '✨'}</span>
-                  {isSubmitting ? 'Starting Validation…' : 'Validate My PRD'}
+                  {isSubmitting
+                    ? 'Starting Validation…'
+                    : validationMode === 'short'
+                      ? 'Validate • Free'
+                      : `Validate • ${creditCost} credits`}
                   <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Button>
               </div>
 
               <div className="text-center pt-6 border-t border-gray-200 dark:border-gray-700">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  🔒 <strong>Free & Secure:</strong> No credit card required • 5 free credits (2
-                  validations) • Instant results
+                  🔒 <strong>Free & Secure:</strong> No credit card required • Quick Roast is free
+                  (1/day) • Full PRDs are 2 credits
                 </p>
               </div>
             </CardContent>
@@ -1101,6 +1188,51 @@ export default function Home() {
                     <Badge variant="warning" className="text-xs">
                       {sampleVerdict.verdict.kill_shots.length} Critical Issues Found
                     </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-5 shadow-sm">
+                    <h4 className="font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                      <span className="text-xl">🧭</span> Pivot Generator
+                    </h4>
+                    <ul className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                      {sampleVerdict.verdict.pivot_ideas.map((pivot, idx) => (
+                        <li
+                          key={idx}
+                          className="rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-800/60 px-3 py-2"
+                        >
+                          {pivot}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50/70 dark:bg-emerald-900/20 p-5 shadow-sm">
+                    <h4 className="font-bold text-emerald-900 dark:text-emerald-100 mb-3 flex items-center gap-2">
+                      <span className="text-xl">💼</span> Investor Readiness
+                    </h4>
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="text-3xl font-black text-emerald-600 dark:text-emerald-300">
+                        {sampleVerdict.verdict.investor_readiness.score}
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.2em] text-emerald-700 dark:text-emerald-300">
+                          {sampleVerdict.verdict.investor_readiness.verdict}
+                        </p>
+                        <p className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                          Likelihood of a VC meeting today.
+                        </p>
+                      </div>
+                    </div>
+                    <ul className="space-y-2 text-sm text-emerald-900 dark:text-emerald-100">
+                      {sampleVerdict.verdict.investor_readiness.reasons.map((reason, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="mt-1 h-2 w-2 rounded-full bg-emerald-500" />
+                          <span>{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
 
@@ -1783,6 +1915,20 @@ const sampleVerdict = {
           "A revised PRD draft that explicitly addresses the critical feedback on PDF parsing, 'keyword-heavy' contradictions, 'fit' definition, and a preliminary business model is completed.",
       },
     ],
+    pivot_ideas: [
+      'Pivot to B2B HR compliance tooling for regulated industries (healthcare, finance).',
+      'Bundle resume screening with ATS integrations as a distribution wedge.',
+      'Reframe as internal talent mobility matching to reduce hiring risk.',
+    ],
+    investor_readiness: {
+      score: 34,
+      verdict: 'NotReady',
+      reasons: [
+        'Distribution channel is unclear and costly for SMBs.',
+        'Differentiation is weak against incumbents.',
+        'Core workflow friction (PDF handling) blocks adoption.',
+      ],
+    },
     reasoning:
       "The SkillMatch AI idea addresses a universally acknowledged and high-pain problem for recruiters: the excessive time spent on manual resume screening and the rigidity/opacity of existing ATS. This fundamental need is a strong foundation. However, the proposed MVP as currently defined is riddled with critical flaws that make it impractical, contradictory, and commercially unviable. The explicit exclusion of PDF parsing is a fatal usability flaw for primary users, directly undermining the core time-saving value proposition. The reliance on basic ML techniques (TF-IDF, Logistic Regression) and 'keyword overlap highlights' fundamentally contradicts the problem statement's criticism of 'keyword-heavy' systems, failing to offer genuine differentiation in a highly saturated market. Crucially, the absence of any defined business model makes it a theoretical exercise rather than a viable product. Furthermore, the subjective definition of 'job fit' and significant challenges in acquiring unbiased training data, coupled with the API-only nature creating adoption barriers for SMBs, underscore the need for a fundamental re-evaluation. While the problem space has immense potential, the current solution requires a substantial 'Pivot' to address these core issues, especially prioritizing essential features like PDF parsing, refining the technical approach for true differentiation, and defining a clear revenue strategy.",
     confidence: 0.9,

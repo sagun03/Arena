@@ -200,12 +200,20 @@ class JudgeAgent(BaseAgent):
         parsed_response = self.parse_json_response(response)
 
         # Convert to Verdict model
+        investor_readiness = parsed_response.get("investor_readiness") or {
+            "score": 0,
+            "verdict": "NotReady",
+            "reasons": ["Insufficient data to assess investor readiness."],
+        }
+
         verdict = Verdict(
             decision=parsed_response["decision"],
             scorecard=parsed_response["scorecard"],
             kill_shots=parsed_response["kill_shots"],
             assumptions=parsed_response["assumptions"],
             test_plan=parsed_response["test_plan"],
+            pivot_ideas=parsed_response.get("pivot_ideas", []),
+            investor_readiness=investor_readiness,
             reasoning=parsed_response["reasoning"],
             confidence=parsed_response.get("confidence", 0.5),
         )

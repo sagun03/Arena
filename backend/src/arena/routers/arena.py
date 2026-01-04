@@ -4,7 +4,7 @@ import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 import anyio
 from arena.agents.builder_agent import BuilderAgent
@@ -35,7 +35,68 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
-VALIDATION_CREDIT_COST = 2
+VALIDATION_CREDIT_COSTS = {
+    "short": 0,
+    "long": 2,
+}
+
+SHORT_MODE_MAX_CHARS = 400
+SHORT_MODE_MIN_LINES = 2
+SHORT_MODE_MAX_LINES = 5
+
+
+class QuickRoastLimitError(RuntimeError):
+    """Raised when daily quick roast limit is exceeded."""
+
+
+def _enforce_quick_roast_limit(decoded: Dict[str, Any]) -> None:
+    uid = decoded.get("uid")
+    email = decoded.get("email")
+    if not uid or not email:
+        raise HTTPException(status_code=401, detail="Missing uid/email in token")
+
+    db = get_firestore_client()
+    user_ref = db.collection("users").document(uid)
+    today = datetime.utcnow().date().isoformat()
+    provider = (decoded.get("firebase") or {}).get("sign_in_provider")
+    login_provider = "google" if provider == "google.com" else "email"
+    name = decoded.get("name") or email.split("@")[0]
+
+    @firestore.transactional
+    def _update(transaction: firestore.Transaction) -> None:
+        snapshot = user_ref.get(transaction=transaction)
+        data = snapshot.to_dict() if snapshot.exists else {}
+        last_date = data.get("quick_roast_last_date")
+        count = int(data.get("quick_roast_count_today") or 0)
+        if last_date != today:
+            count = 0
+        if count >= 1:
+            raise QuickRoastLimitError("Quick Roast limit reached. Try again tomorrow.")
+        if not snapshot.exists:
+            transaction.set(
+                user_ref,
+                {
+                    "uid": uid,
+                    "name": name,
+                    "email": email.lower(),
+                    "createdAt": datetime.utcnow().isoformat(),
+                    "verified": decoded.get("email_verified", False),
+                    "loginProvider": login_provider,
+                    "credits": 0,
+                },
+                merge=True,
+            )
+        transaction.set(
+            user_ref,
+            {
+                "quick_roast_last_date": today,
+                "quick_roast_count_today": count + 1,
+                "updatedAt": datetime.utcnow().isoformat(),
+            },
+            merge=True,
+        )
+
+    _update(db.transaction())
 
 
 def detect_idea_domain(
@@ -223,6 +284,10 @@ class IdeaValidationRequest(BaseModel):
     """Request model for idea validation"""
 
     prd_text: str = Field(..., description="Raw PRD/plan text from ChatGPT or similar")
+    mode: Literal["short", "long"] = Field(
+        default="long",
+        description="Validation mode: short (2 rounds) or long (full debate).",
+    )
     domain: Optional[str] = Field(
         default=None,
         description="Optional domain override (SaaS, Marketplace, FinTech, B2B, B2C, etc.)",
@@ -671,9 +736,14 @@ async def get_debate_graph(
     current_round = int(state.get("current_round", 0))
     round_status = state.get("round_status", state.get("status", "pending"))
 
-    ordered_nodes = ["clarification", "attacks", "defense", "verdict"]
-    # Map round numbers to nodes: 1->clarification, 2->attacks, 3->defense, 5->verdict
-    round_to_index = {1: 0, 2: 1, 3: 2, 5: 3}
+    validation_mode = state.get("validation_mode", "long")
+    if validation_mode == "short":
+        ordered_nodes = ["clarification", "verdict"]
+        round_to_index = {1: 0, 2: 1}
+    else:
+        ordered_nodes = ["clarification", "attacks", "defense", "verdict"]
+        # Map round numbers to nodes: 1->clarification, 2->attacks, 3->defense, 5->verdict
+        round_to_index = {1: 0, 2: 1, 3: 2, 5: 3}
     idx = round_to_index.get(current_round, -1)
     completed_nodes = ordered_nodes[: max(0, idx)] if idx >= 0 else []
     pending_nodes = [n for n in ordered_nodes if n not in completed_nodes]
@@ -719,8 +789,27 @@ async def validate_idea(
         if not uid:
             raise HTTPException(status_code=401, detail="Missing uid in token")
 
+        if request.mode == "short":
+            line_count = len([line for line in request.prd_text.splitlines() if line.strip()])
+            if line_count < SHORT_MODE_MIN_LINES or line_count > SHORT_MODE_MAX_LINES:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Short mode requires 2–5 non-empty lines.",
+                )
+            if len(request.prd_text) > SHORT_MODE_MAX_CHARS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Short mode is limited to {SHORT_MODE_MAX_CHARS} characters.",
+                )
+            try:
+                await anyio.to_thread.run_sync(_enforce_quick_roast_limit, user)
+            except QuickRoastLimitError as exc:
+                raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+        credit_cost = VALIDATION_CREDIT_COSTS[request.mode]
         try:
-            await anyio.to_thread.run_sync(consume_credits, uid, VALIDATION_CREDIT_COST)
+            if credit_cost > 0:
+                await anyio.to_thread.run_sync(consume_credits, uid, credit_cost)
         except InsufficientCreditsError as exc:
             raise HTTPException(status_code=402, detail="Insufficient credits") from exc
         except ValueError as exc:
@@ -734,6 +823,7 @@ async def validate_idea(
         initial_state: Dict[str, Any] = {
             "debate_id": debate_id,
             "user_id": uid,
+            "validation_mode": request.mode,
             "status": "pending",
             "current_round": 0,
             "round_status": "pending",
@@ -746,7 +836,8 @@ async def validate_idea(
         initial_state["idea_title"] = idea_title
         saved = await save_debate_state(debate_id, initial_state)
         if not saved:
-            await anyio.to_thread.run_sync(grant_credits, uid, VALIDATION_CREDIT_COST)
+            if credit_cost > 0:
+                await anyio.to_thread.run_sync(grant_credits, uid, credit_cost)
             raise HTTPException(status_code=500, detail="Failed to create debate state")
 
         # Persist a pending verdict document so clients can list active validations immediately
@@ -769,7 +860,7 @@ async def validate_idea(
         await anyio.to_thread.run_sync(lambda: doc_ref.set(record, merge=True))
 
         # Start background debate execution (non-blocking)
-        asyncio.create_task(execute_debate(debate_id, request.prd_text))
+        asyncio.create_task(execute_debate(debate_id, request.prd_text, request.mode))
 
         return IdeaValidationResponse(
             debate_id=debate_id,
@@ -1188,7 +1279,7 @@ async def delete_debate(debate_id: str = Path(..., description="Unique debate id
     raise HTTPException(status_code=501, detail="Delete debate state not yet implemented")
 
 
-async def execute_debate(debate_id: str, prd_text: str) -> None:
+async def execute_debate(debate_id: str, prd_text: str, mode: str = "long") -> None:
     """
     Execute the debate workflow in the background and stream updates to state.
 
@@ -1288,6 +1379,51 @@ async def execute_debate(debate_id: str, prd_text: str) -> None:
                 "timestamp": datetime.utcnow().isoformat(),
             }
         )
+
+        if mode == "short":
+            await append_event(
+                {
+                    "agent": "Judge",
+                    "round": 2,
+                    "type": "verdict:start",
+                    "text": "⚖️ Weighing the brief and generating a fast verdict...",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
+            verdict = await judge.generate_verdict(
+                idea=idea,
+                clarification=clarification.get("raw_response", ""),
+                attacks={},
+                defense="",
+                cross_examination=[],
+                evidence_tags=[],
+            )
+
+            await append_event(
+                {
+                    "agent": "Judge",
+                    "round": 2,
+                    "type": "verdict",
+                    "text": (
+                        verdict.get("raw_response", "")
+                        if isinstance(verdict, dict)
+                        else getattr(verdict, "raw_response", "")
+                    ),
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
+
+            final_state = await get_debate_state(debate_id) or {}
+            final_state.update(
+                {
+                    "status": "completed",
+                    "round_status": "completed",
+                    "verdict": verdict.model_dump() if hasattr(verdict, "model_dump") else verdict,
+                    "last_updated": datetime.utcnow().isoformat(),
+                }
+            )
+            await save_debate_state(debate_id, final_state)
+            return
 
         # Round 2: Attacks/Analyses
         await append_event(

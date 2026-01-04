@@ -191,10 +191,10 @@ export default function DebatePage() {
                 </Badge>
                 <div>
                   <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-slate-900 dark:text-white">
-                    Live analysis
+                    Boardroom transcript
                   </h1>
                   <p className="text-lg text-slate-600 dark:text-slate-300">
-                    Watch agents challenge your idea in real-time.
+                    Formal minutes from your multi-agent review committee.
                   </p>
                 </div>
               </div>
@@ -384,7 +384,7 @@ export default function DebatePage() {
                 {/* Transcript */}
                 <div>
                   <h3 className="font-bold text-lg mb-6 text-gray-900 dark:text-white">
-                    Debate Timeline
+                    Boardroom Minutes
                   </h3>
                   <div className="space-y-8">
                     {state.transcript?.length ? (
@@ -495,59 +495,82 @@ export default function DebatePage() {
                                   )
                                 }
 
-                                let agentColor =
-                                  'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-600'
-                                let agentBadge = ''
+                                let agentTone = {
+                                  bg: 'bg-slate-100 dark:bg-slate-700',
+                                  text: 'text-slate-900 dark:text-slate-100',
+                                  border: 'border-slate-200 dark:border-slate-600',
+                                  accent: 'border-slate-300 dark:border-slate-600',
+                                  badge: '💬',
+                                }
                                 if (agent === 'Judge') {
-                                  agentColor =
-                                    'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-700'
-                                  agentBadge = '⚖️'
+                                  agentTone = {
+                                    bg: 'bg-blue-50 dark:bg-blue-900/30',
+                                    text: 'text-blue-900 dark:text-blue-100',
+                                    border: 'border-blue-200 dark:border-blue-700',
+                                    accent: 'border-blue-400 dark:border-blue-600',
+                                    badge: '⚖️',
+                                  }
                                 } else if (agent === 'Skeptic') {
-                                  agentColor =
-                                    'bg-rose-50 dark:bg-rose-900/30 text-rose-900 dark:text-rose-100 border border-rose-200 dark:border-rose-700'
-                                  agentBadge = '🤨'
+                                  agentTone = {
+                                    bg: 'bg-rose-50 dark:bg-rose-900/30',
+                                    text: 'text-rose-900 dark:text-rose-100',
+                                    border: 'border-rose-200 dark:border-rose-700',
+                                    accent: 'border-rose-400 dark:border-rose-600',
+                                    badge: '🤨',
+                                  }
                                 } else if (agent === 'Customer') {
-                                  agentColor =
-                                    'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 border border-emerald-200 dark:border-emerald-700'
-                                  agentBadge = '👥'
+                                  agentTone = {
+                                    bg: 'bg-emerald-50 dark:bg-emerald-900/30',
+                                    text: 'text-emerald-900 dark:text-emerald-100',
+                                    border: 'border-emerald-200 dark:border-emerald-700',
+                                    accent: 'border-emerald-400 dark:border-emerald-600',
+                                    badge: '👥',
+                                  }
                                 } else if (agent === 'Market') {
-                                  agentColor =
-                                    'bg-purple-50 dark:bg-purple-900/30 text-purple-900 dark:text-purple-100 border border-purple-200 dark:border-purple-700'
-                                  agentBadge = '📊'
+                                  agentTone = {
+                                    bg: 'bg-purple-50 dark:bg-purple-900/30',
+                                    text: 'text-purple-900 dark:text-purple-100',
+                                    border: 'border-purple-200 dark:border-purple-700',
+                                    accent: 'border-purple-400 dark:border-purple-600',
+                                    badge: '📊',
+                                  }
                                 } else if (agent === 'Builder') {
-                                  agentColor =
-                                    'bg-orange-50 dark:bg-orange-900/30 text-orange-900 dark:text-orange-100 border border-orange-200 dark:border-orange-700'
-                                  agentBadge = '🔨'
+                                  agentTone = {
+                                    bg: 'bg-orange-50 dark:bg-orange-900/30',
+                                    text: 'text-orange-900 dark:text-orange-100',
+                                    border: 'border-orange-200 dark:border-orange-700',
+                                    accent: 'border-orange-400 dark:border-orange-600',
+                                    badge: '🔨',
+                                  }
                                 } else if (agent === 'System') {
-                                  agentColor =
-                                    'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
-                                  agentBadge = '⚙️'
+                                  agentTone = {
+                                    bg: 'bg-slate-100 dark:bg-slate-700',
+                                    text: 'text-slate-700 dark:text-slate-300',
+                                    border: 'border-slate-200 dark:border-slate-600',
+                                    accent: 'border-slate-300 dark:border-slate-500',
+                                    badge: '⚙️',
+                                  }
                                 }
 
-                                const tailPosition =
+                                const accentSide =
                                   align === 'right'
-                                    ? 'right-4 -bottom-2'
+                                    ? 'border-r-4'
                                     : align === 'center'
-                                      ? 'left-1/2 -translate-x-1/2 -bottom-2'
-                                      : 'left-4 -bottom-2'
+                                      ? 'border-l-4'
+                                      : 'border-l-4'
 
                                 return (
                                   <div key={`${round}-${i}`} className={`flex ${bubbleAlign}`}>
-                                    <div className="flex items-start gap-3 max-w-3xl">
-                                      <div className="h-10 w-10 rounded-full bg-white/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-base">
-                                        {agentBadge || '💬'}
-                                      </div>
+                                    <div className="w-full max-w-3xl">
                                       <div
-                                        className={`relative max-w-xl rounded-2xl p-4 ${agentColor} transition-all hover:shadow-md text-left`}
+                                        className={`rounded-2xl p-4 ${agentTone.bg} ${agentTone.text} border ${agentTone.border} ${accentSide} ${agentTone.accent} shadow-sm`}
                                       >
-                                        <span
-                                          className={`absolute h-3 w-3 rotate-45 ${agentColor} ${tailPosition}`}
-                                        />
-                                        <div className="flex items-center justify-between mb-3 gap-4">
+                                        <div className="flex items-center justify-between gap-4 mb-3">
                                           <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-sm">{agent}</span>
+                                            <span className="text-base">{agentTone.badge}</span>
+                                            <span className="text-sm font-semibold">{agent}</span>
                                             {roleLabel && (
-                                              <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                                              <span className="text-[10px] uppercase tracking-[0.2em] opacity-70">
                                                 {roleLabel}
                                               </span>
                                             )}

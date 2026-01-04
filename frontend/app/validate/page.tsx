@@ -27,7 +27,14 @@ interface ActiveDebateItem {
 }
 
 const LOCAL_ACTIVE_KEY = 'ideaaudit_active_validations'
-const VALIDATION_CREDIT_COST = 2
+const SHORT_MODE_MIN_LINES = 2
+const SHORT_MODE_MAX_LINES = 5
+const SHORT_MODE_MAX_CHARS = 400
+
+const creditCostByMode = {
+  short: 0,
+  long: 2,
+} as const
 
 const steps = [
   {
@@ -52,6 +59,7 @@ export default function ValidatePage() {
   const { credits, setCredits } = useCredits()
   const router = useRouter()
   const [prd, setPrd] = useState('')
+  const [validationMode, setValidationMode] = useState<'short' | 'long'>('short')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ValidationResponse | null>(null)
@@ -124,11 +132,42 @@ export default function ValidatePage() {
     loadActive()
   }, [user])
 
-  const disabled = useMemo(() => !prd.trim() || isSubmitting, [prd, isSubmitting])
+  const prdLineCount = useMemo(() => {
+    return prd
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean).length
+  }, [prd])
+
+  const shortModeError = useMemo(() => {
+    if (validationMode !== 'short') return null
+    if (prd.length > SHORT_MODE_MAX_CHARS) {
+      return `Keep it under ${SHORT_MODE_MAX_CHARS} characters for Short mode.`
+    }
+    if (prdLineCount < SHORT_MODE_MIN_LINES) {
+      return `Add at least ${SHORT_MODE_MIN_LINES} lines for Short mode.`
+    }
+    if (prdLineCount > SHORT_MODE_MAX_LINES) {
+      return `Limit to ${SHORT_MODE_MAX_LINES} lines for Short mode.`
+    }
+    return null
+  }, [prd, prdLineCount, validationMode])
+
+  const creditCost = creditCostByMode[validationMode]
+
+  const disabled = useMemo(
+    () => !prd.trim() || isSubmitting || Boolean(shortModeError),
+    [prd, isSubmitting, shortModeError]
+  )
 
   async function handleValidate() {
     if (!prd.trim()) return
-    if (credits !== null && credits < VALIDATION_CREDIT_COST) {
+    if (shortModeError) {
+      setError(shortModeError)
+      toast.error(shortModeError)
+      return
+    }
+    if (validationMode === 'long' && credits !== null && credits < creditCost) {
       setShowCreditsModal(true)
       return
     }
@@ -136,13 +175,13 @@ export default function ValidatePage() {
       setIsSubmitting(true)
       setError(null)
       setResult(null)
-      const data = await startValidation(prd)
+      const data = await startValidation(prd, validationMode)
       setResult(data)
       if (data?.debate_id) {
         upsertActive({ id: data.debate_id, ideaTitle: data.idea_title, status: 'pending' })
       }
-      if (credits !== null) {
-        setCredits(Math.max(credits - VALIDATION_CREDIT_COST, 0))
+      if (credits !== null && validationMode === 'long') {
+        setCredits(Math.max(credits - creditCost, 0))
       }
       toast.success('Validation started. Jump into the debate or verdict tabs.')
     } catch (err: any) {
@@ -225,14 +264,62 @@ export default function ValidatePage() {
                   {error}
                 </div>
               )}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Validation mode
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Short runs 2 rounds and is free (1/day). Long runs 5 rounds and costs 2 credits.
+                  </p>
+                </div>
+                <div className="flex rounded-full border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 p-1">
+                  <Button
+                    size="sm"
+                    variant={validationMode === 'short' ? 'primary' : 'secondary'}
+                    className={
+                      validationMode === 'short'
+                        ? 'rounded-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]'
+                        : 'rounded-full'
+                    }
+                    onClick={() => setValidationMode('short')}
+                  >
+                    Short
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={validationMode === 'long' ? 'primary' : 'secondary'}
+                    className={
+                      validationMode === 'long'
+                        ? 'rounded-full bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)]'
+                        : 'rounded-full'
+                    }
+                    onClick={() => setValidationMode('long')}
+                  >
+                    Long
+                  </Button>
+                </div>
+              </div>
               <textarea
-                rows={12}
+                rows={validationMode === 'short' ? 8 : 12}
                 value={prd}
                 onChange={e => setPrd(e.target.value)}
-                placeholder="What are you building, for whom, and why now? Include acceptance criteria, rollout, and risks."
+                placeholder={
+                  validationMode === 'short'
+                    ? 'Summarize your idea in 2–5 lines: user, problem, value, and why now.'
+                    : 'What are you building, for whom, and why now? Include acceptance criteria, rollout, and risks.'
+                }
                 className="w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-gray-900/70 px-4 py-3 text-base text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500"
                 disabled={isSubmitting}
               />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <span>
+                  {validationMode === 'short'
+                    ? `Short mode: ${prdLineCount}/${SHORT_MODE_MAX_LINES} lines • ${prd.length}/${SHORT_MODE_MAX_CHARS} chars • 1 free/day`
+                    : 'Long mode: full PRD encouraged.'}
+                </span>
+                {shortModeError && <span className="text-red-600">{shortModeError}</span>}
+              </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-slate-500">
                   We store this securely to generate the debate and verdict.
@@ -250,7 +337,11 @@ export default function ValidatePage() {
                     onClick={handleValidate}
                     disabled={disabled}
                   >
-                    {isSubmitting ? 'Starting...' : 'Validate now'}
+                    {isSubmitting
+                      ? 'Starting...'
+                      : validationMode === 'short'
+                        ? 'Validate now • Free'
+                        : `Validate now • ${creditCost} credits`}
                   </Button>
                 </div>
               </div>
