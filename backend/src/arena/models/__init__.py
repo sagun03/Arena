@@ -3,7 +3,13 @@
 from arena.models.debate_state import DebateState
 from arena.models.evidence import EvidenceSource, EvidenceTag, EvidenceType
 from arena.models.idea import Idea, IdeaInput
-from arena.models.verdict import KillShot, Scorecard, TestPlanItem, Verdict
+from arena.models.verdict import (
+    ChecklistItem,
+    KillShot,
+    Scorecard,
+    TestPlanItem,
+    Verdict,
+)
 
 __all__ = [
     "Idea",
@@ -14,6 +20,7 @@ __all__ = [
     "DebateState",
     "Verdict",
     "Scorecard",
+    "ChecklistItem",
     "KillShot",
     "TestPlanItem",
 ]

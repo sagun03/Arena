@@ -212,6 +212,8 @@ class JudgeAgent(BaseAgent):
             kill_shots=parsed_response["kill_shots"],
             assumptions=parsed_response["assumptions"],
             test_plan=parsed_response["test_plan"],
+            risk_checklist=parsed_response.get("risk_checklist", []),
+            sprint_plan=parsed_response.get("sprint_plan", []),
             pivot_ideas=parsed_response.get("pivot_ideas", []),
             investor_readiness=investor_readiness,
             reasoning=parsed_response["reasoning"],

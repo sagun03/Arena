@@ -11,6 +11,7 @@ class UserModel(BaseModel):
     verified: bool = False
     loginProvider: str = "email"
     credits: int = 0
+    interviewCredits: int = 0
     stripeCustomerId: Optional[str] = None
     stripeSubscriptionId: Optional[str] = None
     stripePlan: Optional[str] = None

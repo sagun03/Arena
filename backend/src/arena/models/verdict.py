@@ -71,6 +71,25 @@ class TestPlanItem(BaseModel):
         }
 
 
+class ChecklistItem(BaseModel):
+    """A de-risk checklist task."""
+
+    title: str = Field(..., description="Checklist task title")
+    rationale: str = Field(..., description="Why this task matters")
+    priority: str = Field(..., description="Priority: high|medium|low")
+    owner: str = Field(..., description="Owner: Founder|Tech|Market|Ops")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "title": "Validate pricing willingness",
+                "rationale": "Pricing sensitivity is the biggest unknown.",
+                "priority": "high",
+                "owner": "Founder",
+            }
+        }
+
+
 class InvestorReadiness(BaseModel):
     """How investable the pitch is right now."""
 
@@ -117,6 +136,13 @@ class Verdict(BaseModel):
     test_plan: List[TestPlanItem] = Field(
         ..., max_length=7, description="7-day validation test plan"
     )
+    risk_checklist: List[ChecklistItem] = Field(
+        default_factory=list,
+        description="De-risk checklist tasks derived from the debate",
+    )
+    sprint_plan: List[TestPlanItem] = Field(
+        default_factory=list, max_length=7, description="Custom 7-day sprint plan"
+    )
     pivot_ideas: List[str] = Field(
         default_factory=list, max_length=3, description="Three pivot directions to consider"
     )
@@ -161,6 +187,21 @@ class Verdict(BaseModel):
                         "day": 1,
                         "task": "Interview 5 target customers",
                         "success_criteria": "3+ confirm problem exists",
+                    }
+                ],
+                "risk_checklist": [
+                    {
+                        "title": "Validate pricing willingness",
+                        "rationale": "Pricing sensitivity is the biggest unknown.",
+                        "priority": "high",
+                        "owner": "Founder",
+                    }
+                ],
+                "sprint_plan": [
+                    {
+                        "day": 1,
+                        "task": "Run pricing survey",
+                        "success_criteria": "10+ responses with clear price band",
                     }
                 ],
                 "pivot_ideas": [

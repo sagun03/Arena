@@ -190,7 +190,13 @@ Generate a comprehensive verdict that includes:
    - Verdict label: "NotReady", "Warm", "InvestorReady"
    - Provide 3-5 bullet reasons for the score
 
-9. **Confidence**: How confident are you in this verdict? (0.0-1.0)
+9. **De-Risk Checklist**: 6-10 specific tasks to reduce uncertainty
+   - Provide title, rationale, priority, and owner
+
+10. **Sprint Plan**: A custom 7-day execution plan
+   - Day-by-day tasks with success criteria
+
+11. **Confidence**: How confident are you in this verdict? (0.0-1.0)
 
 **Response Format (JSON):**
 {{
@@ -220,6 +226,23 @@ Generate a comprehensive verdict that includes:
         }},
         ...
     ],
+    "risk_checklist": [
+        {{
+            "title": "Checklist task title",
+            "rationale": "Why this matters",
+            "priority": "high|medium|low",
+            "owner": "Founder|Tech|Market|Ops"
+        }},
+        ...
+    ],
+    "sprint_plan": [
+        {{
+            "day": 1,
+            "task": "Sprint task description",
+            "success_criteria": "How to measure success"
+        }},
+        ...
+    ],
     "pivot_ideas": [
         "Pivot idea 1",
         "Pivot idea 2",
@@ -245,6 +268,72 @@ Generate a comprehensive verdict that includes:
 # ============================================================================
 # WORKER AGENT PROMPTS
 # ============================================================================
+
+INTERVIEW_PROMPT = """
+You are a synthetic customer persona in IdeaAudit.
+
+**Persona Profile (JSON):**
+{persona}
+
+**Idea:**
+{idea_text}
+
+**Extracted Structure:**
+{extracted_structure}
+
+**Your Task:**
+Provide a realistic reaction as this persona:
+1. Immediate reaction (4-5 bullet points).
+2. Top concerns (3 bullet points).
+3. Willingness to pay (yes/no + price range).
+4. Adoption barriers.
+5. One sentence verdict: "I would try", "Maybe", or "No".
+
+**Response Format (JSON):**
+{{
+  "summary": "Short persona reaction summary",
+  "reactions": ["Bullet 1", "Bullet 2", "Bullet 3", "Bullet 4"],
+  "concerns": ["Concern 1", "Concern 2", "Concern 3"],
+  "willingness_to_pay": {{
+    "will_pay": true/false,
+    "price_range": "$X-$Y",
+    "reason": "why"
+  }},
+  "adoption_barriers": ["Barrier 1", "Barrier 2"],
+  "verdict": "I would try|Maybe|No"
+}}
+"""
+
+INTERVIEW_REBUTTAL_PROMPT = """
+You are the same synthetic customer persona. Respond to the founder's rebuttal.
+
+**Persona (JSON):**
+{persona}
+
+**Idea:**
+{idea_text}
+
+**Conversation History (JSON):**
+{history}
+
+**Founder Message:**
+{founder_message}
+
+**Your Task:**
+Reply with:
+1. A short response paragraph.
+2. 3-5 bullet reactions.
+3. Final stance: "buy", "maybe", or "no".
+4. Follow-up question(s).
+
+**Response Format (JSON):**
+{{
+  "reply": "Short response paragraph",
+  "bullets": ["Bullet 1", "Bullet 2", "Bullet 3"],
+  "final_stance": "buy|maybe|no",
+  "follow_up_questions": ["Question 1", "Question 2"]
+}}
+"""
 
 SKEPTIC_PROMPT = """
 You are the Skeptic Agent in ARENA, an adversarial idea validation system.

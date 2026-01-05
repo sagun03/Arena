@@ -361,6 +361,31 @@ class VerdictResponse(BaseModel):
     last_updated: Optional[str] = Field(None, description="Last update timestamp (ISO)")
 
 
+class ExecutionTask(BaseModel):
+    """Execution task for de-risk checklist or sprint plan."""
+
+    id: str
+    title: Optional[str] = None
+    rationale: Optional[str] = None
+    priority: Optional[str] = None
+    owner: Optional[str] = None
+    day: Optional[int] = None
+    task: Optional[str] = None
+    success_criteria: Optional[str] = None
+    completed: bool = False
+
+
+class ExecutionPlanResponse(BaseModel):
+    debate_id: str
+    checklist: list[ExecutionTask] = Field(default_factory=list)
+    sprint_plan: list[ExecutionTask] = Field(default_factory=list)
+
+
+class ExecutionTaskUpdate(BaseModel):
+    task_type: Literal["checklist", "sprint"] = Field(..., description="Which task list")
+    completed: bool = Field(..., description="Completion status")
+
+
 class VerdictRecord(BaseModel):
     """Stored verdict document returned to the frontend."""
 
@@ -462,6 +487,8 @@ def _build_firestore_record(
     kill_shots = None
     assumptions = None
     test_plan = None
+    risk_checklist = None
+    sprint_plan = None
 
     if verdict_model:
         decision = verdict_model.decision
@@ -486,6 +513,23 @@ def _build_firestore_record(
             }
             for item in verdict_model.test_plan
         ]
+        risk_checklist = [
+            {
+                "title": item.title,
+                "rationale": item.rationale,
+                "priority": item.priority,
+                "owner": item.owner,
+            }
+            for item in verdict_model.risk_checklist
+        ]
+        sprint_plan = [
+            {
+                "day": item.day,
+                "task": item.task,
+                "success_criteria": item.success_criteria,
+            }
+            for item in verdict_model.sprint_plan
+        ]
     elif isinstance(verdict_dict, dict):
         decision = verdict_dict.get("decision")
         confidence = verdict_dict.get("confidence")
@@ -494,6 +538,8 @@ def _build_firestore_record(
         kill_shots = verdict_dict.get("kill_shots") or verdict_dict.get("killShots")
         assumptions = verdict_dict.get("assumptions")
         test_plan = verdict_dict.get("test_plan") or verdict_dict.get("testPlan")
+        risk_checklist = verdict_dict.get("risk_checklist") or verdict_dict.get("riskChecklist")
+        sprint_plan = verdict_dict.get("sprint_plan") or verdict_dict.get("sprintPlan")
 
     record = {
         "debate_id": debate_id,
@@ -507,6 +553,8 @@ def _build_firestore_record(
         "kill_shots": kill_shots,
         "assumptions": assumptions,
         "test_plan": test_plan,
+        "risk_checklist": risk_checklist,
+        "sprint_plan": sprint_plan,
         "verdict": verdict_dict,
         "created_at": existing_created_at or created_at,
         "updated_at": created_at,
@@ -528,6 +576,51 @@ def _extract_idea_title(prd_text: str) -> str:
     candidate = candidate[:140].strip()
 
     return candidate or "Untitled Idea"
+
+
+def _initialize_execution_plan(
+    debate_id: str,
+    verdict_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    checklist = verdict_data.get("risk_checklist") or []
+    sprint_plan = verdict_data.get("sprint_plan") or verdict_data.get("test_plan") or []
+
+    def _build_checklist(items: list[dict]) -> list[dict]:
+        built = []
+        for item in items:
+            built.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "title": item.get("title"),
+                    "rationale": item.get("rationale"),
+                    "priority": item.get("priority"),
+                    "owner": item.get("owner"),
+                    "completed": False,
+                }
+            )
+        return built
+
+    def _build_sprint(items: list[dict]) -> list[dict]:
+        built = []
+        for item in items:
+            built.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "day": item.get("day"),
+                    "task": item.get("task"),
+                    "success_criteria": item.get("success_criteria"),
+                    "completed": False,
+                }
+            )
+        return built
+
+    return {
+        "debate_id": debate_id,
+        "checklist": _build_checklist(checklist),
+        "sprint_plan": _build_sprint(sprint_plan),
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+    }
 
 
 def _format_verdict_record(doc_id: str, data: Dict[str, Any]) -> VerdictRecord:
@@ -700,9 +793,130 @@ async def create_verdict_document(
             )
 
         await anyio.to_thread.run_sync(doc_ref.set, record, True)
+
+        verdict_payload = record.get("verdict") or existing_data.get("verdict")
+        if verdict_payload:
+            exec_ref = db.collection("execution_plans").document(payload.debate_id)
+            exec_snapshot = await anyio.to_thread.run_sync(exec_ref.get)
+            if not exec_snapshot.exists:
+                plan = _initialize_execution_plan(payload.debate_id, verdict_payload)
+                plan["uid"] = uid
+                await anyio.to_thread.run_sync(exec_ref.set, plan, True)
+
         return _format_verdict_record(doc_ref.id, record)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to store verdict: {exc}") from exc
+
+
+@router.get(
+    "/execution/{debate_id}",
+    response_model=ExecutionPlanResponse,
+    summary="Get Execution Plan",
+    description="Fetch the execution checklist and sprint plan for a verdict.",
+    tags=["arena"],
+)
+async def get_execution_plan(
+    debate_id: str,
+    user: Dict[str, Any] = Depends(require_auth),
+) -> ExecutionPlanResponse:
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+
+    db = await anyio.to_thread.run_sync(get_firestore_client)
+    plan_ref = db.collection("execution_plans").document(debate_id)
+    plan_snapshot = await anyio.to_thread.run_sync(plan_ref.get)
+
+    if plan_snapshot.exists:
+        plan_data = plan_snapshot.to_dict() or {}
+        owner = plan_data.get("uid") or plan_data.get("user_id") or plan_data.get("userId")
+        if owner and owner != uid:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        return ExecutionPlanResponse(
+            debate_id=debate_id,
+            checklist=[ExecutionTask(**item) for item in plan_data.get("checklist", [])],
+            sprint_plan=[ExecutionTask(**item) for item in plan_data.get("sprint_plan", [])],
+        )
+
+    verdict_ref = db.collection("verdicts").document(debate_id)
+    verdict_snapshot = await anyio.to_thread.run_sync(verdict_ref.get)
+    verdict_data = verdict_snapshot.to_dict() if verdict_snapshot.exists else {}
+    verdict_owner = (
+        verdict_data.get("user_id") or verdict_data.get("userId") if verdict_data else None
+    )
+    if verdict_owner and verdict_owner != uid:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    verdict_payload = (verdict_data or {}).get("verdict")
+    if not verdict_payload:
+        state = await get_debate_state(debate_id)
+        if not state:
+            raise HTTPException(status_code=404, detail="Execution plan not available yet")
+        _enforce_state_owner(state, uid)
+        verdict_payload = state.get("verdict")
+
+    if not verdict_payload:
+        raise HTTPException(status_code=404, detail="Execution plan not available yet")
+
+    plan = _initialize_execution_plan(debate_id, verdict_payload)
+    plan["uid"] = uid
+    await anyio.to_thread.run_sync(plan_ref.set, plan, True)
+    return ExecutionPlanResponse(
+        debate_id=debate_id,
+        checklist=[ExecutionTask(**item) for item in plan.get("checklist", [])],
+        sprint_plan=[ExecutionTask(**item) for item in plan.get("sprint_plan", [])],
+    )
+
+
+@router.post(
+    "/execution/{debate_id}/tasks/{task_id}",
+    response_model=ExecutionPlanResponse,
+    summary="Update Execution Task",
+    description="Toggle completion for a checklist or sprint task.",
+    tags=["arena"],
+)
+async def update_execution_task(
+    debate_id: str,
+    task_id: str,
+    payload: ExecutionTaskUpdate,
+    user: Dict[str, Any] = Depends(require_auth),
+) -> ExecutionPlanResponse:
+    uid = user.get("uid")
+    if not uid:
+        raise HTTPException(status_code=401, detail="Missing uid in token")
+
+    db = await anyio.to_thread.run_sync(get_firestore_client)
+    plan_ref = db.collection("execution_plans").document(debate_id)
+    plan_snapshot = await anyio.to_thread.run_sync(plan_ref.get)
+    if not plan_snapshot.exists:
+        raise HTTPException(status_code=404, detail="Execution plan not found")
+
+    plan_data = plan_snapshot.to_dict() or {}
+    owner = plan_data.get("uid") or plan_data.get("user_id") or plan_data.get("userId")
+    if owner and owner != uid:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    key = "checklist" if payload.task_type == "checklist" else "sprint_plan"
+    tasks = list(plan_data.get(key, []))
+    updated = False
+    for item in tasks:
+        if item.get("id") == task_id:
+            item["completed"] = payload.completed
+            updated = True
+            break
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    plan_data[key] = tasks
+    plan_data["updated_at"] = datetime.utcnow()
+    await anyio.to_thread.run_sync(plan_ref.set, plan_data, True)
+
+    return ExecutionPlanResponse(
+        debate_id=debate_id,
+        checklist=[ExecutionTask(**item) for item in plan_data.get("checklist", [])],
+        sprint_plan=[ExecutionTask(**item) for item in plan_data.get("sprint_plan", [])],
+    )
 
 
 @router.get(
@@ -850,6 +1064,7 @@ async def validate_idea(
             "transcript": [],
             "started_at": datetime.utcnow().isoformat(),
             "requested_domain": request.domain,
+            "idea_text": request.prd_text,
         }
 
         # Save initial state without blocking on LLM extraction so the request returns fast
@@ -1364,6 +1579,8 @@ async def execute_debate(debate_id: str, prd_text: str, mode: str = "long") -> N
         idea_title = idea.extracted_structure.metadata.get("title", "Untitled Idea")
         state["idea_title"] = idea_title
         state["requested_domain"] = pre_state.get("requested_domain")
+        state["idea_text"] = idea.original_prd_text
+        state["extracted_structure"] = idea.extracted_structure.model_dump()
         await save_debate_state(debate_id, state)
 
         # Instantiate LLM and agents

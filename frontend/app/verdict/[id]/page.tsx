@@ -7,7 +7,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/badge'
 import { Button } from '@/components/button'
 import { AppShell } from '@/components/app-shell'
-import { getDebateState, getDebateVerdict, getVerdictById, saveVerdict } from '@/lib/arena-service'
+import {
+  getDebateState,
+  getDebateVerdict,
+  getExecutionPlan,
+  getInterviewPersonas,
+  getVerdictById,
+  rebuttalInterview,
+  runInterview,
+  saveVerdict,
+  updateExecutionTask,
+} from '@/lib/arena-service'
 import { useAuth } from '../../providers/auth-provider'
 
 type VerdictResponse = {
@@ -47,10 +57,65 @@ type Verdict = {
   kill_shots?: KillShot[]
   assumptions?: string[]
   test_plan?: TestPlanItem[]
+  risk_checklist?: Array<{
+    title?: string
+    rationale?: string
+    priority?: string
+    owner?: string
+  }>
+  sprint_plan?: TestPlanItem[]
   pivot_ideas?: string[]
   investor_readiness?: InvestorReadiness
   reasoning?: string
   confidence?: number
+}
+
+type ExecutionTask = {
+  id: string
+  title?: string
+  rationale?: string
+  priority?: string
+  owner?: string
+  day?: number
+  task?: string
+  success_criteria?: string
+  completed: boolean
+}
+
+type ExecutionPlan = {
+  debate_id: string
+  checklist: ExecutionTask[]
+  sprint_plan: ExecutionTask[]
+}
+
+type InterviewPersona = {
+  id: string
+  name: string
+  headline?: string
+  traits?: string[]
+  priorities?: string[]
+}
+
+type InterviewResponse = {
+  summary?: string
+  reactions?: string[]
+  concerns?: string[]
+  willingness_to_pay?: {
+    will_pay?: boolean
+    price_range?: string
+    reason?: string
+  }
+  adoption_barriers?: string[]
+  verdict?: string
+  reply?: string
+  bullets?: string[]
+  final_stance?: string
+  follow_up_questions?: string[]
+}
+
+type ChatEntry = {
+  role: 'founder' | 'persona'
+  message: string
 }
 
 const decisionStyles: Record<string, { label: string; badge: string; accent: string }> = {
@@ -71,6 +136,11 @@ function isMissingTitle(value?: string | null) {
 function truncateText(value: string, maxLength: number) {
   if (value.length <= maxLength) return value
   return `${value.slice(0, maxLength).trim()}…`
+}
+
+function limitList(items?: string[], limit = 5) {
+  if (!items?.length) return []
+  return items.slice(0, limit)
 }
 
 function formatTimestamp(value?: string | null) {
@@ -108,6 +178,19 @@ export default function VerdictPage() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
   const [ideaTitle, setIdeaTitle] = useState<string | null>(null)
   const [verdictSaved, setVerdictSaved] = useState(false)
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlan | null>(null)
+  const [planLoading, setPlanLoading] = useState(false)
+  const [planError, setPlanError] = useState<string | null>(null)
+  const [planUpdatingId, setPlanUpdatingId] = useState<string | null>(null)
+  const [personas, setPersonas] = useState<InterviewPersona[]>([])
+  const [interviewResponses, setInterviewResponses] = useState<Record<string, InterviewResponse>>(
+    {}
+  )
+  const [chatHistory, setChatHistory] = useState<Record<string, ChatEntry[]>>({})
+  const [interviewLoadingId, setInterviewLoadingId] = useState<string | null>(null)
+  const [interviewError, setInterviewError] = useState<string | null>(null)
+  const [activePersonaId, setActivePersonaId] = useState<string | null>(null)
+  const [rebuttalMessage, setRebuttalMessage] = useState('')
 
   async function fetchVerdict() {
     try {
@@ -143,9 +226,107 @@ export default function VerdictPage() {
     }
   }
 
+  async function loadExecutionPlan() {
+    if (!id || !user) return
+    try {
+      setPlanLoading(true)
+      setPlanError(null)
+      const plan = await getExecutionPlan(id)
+      setExecutionPlan(plan)
+    } catch (err: any) {
+      const message = err?.response?.data?.detail || err?.message || 'Failed to load execution plan'
+      setPlanError(message)
+    } finally {
+      setPlanLoading(false)
+    }
+  }
+
+  async function loadPersonas() {
+    if (!user) return
+    try {
+      const list = await getInterviewPersonas()
+      setPersonas(list)
+    } catch (err: any) {
+      setInterviewError(
+        err?.response?.data?.detail || err?.message || 'Failed to load interview panel'
+      )
+    }
+  }
+
+  async function handleRunInterview(personaId: string) {
+    if (!id || !user) return
+    try {
+      setInterviewError(null)
+      setInterviewLoadingId(personaId)
+      setActivePersonaId(personaId)
+      const result = await runInterview(id, personaId)
+      setInterviewResponses(prev => ({
+        ...prev,
+        [personaId]: result.response || {},
+      }))
+    } catch (err: any) {
+      setInterviewError(
+        err?.response?.data?.detail || err?.message || 'Interview failed. Try again.'
+      )
+    } finally {
+      setInterviewLoadingId(null)
+    }
+  }
+
+  async function handleRebuttalSubmit(personaId: string) {
+    if (!id || !user || !rebuttalMessage.trim()) return
+    const message = rebuttalMessage.trim()
+    const history = chatHistory[personaId] ?? []
+    try {
+      setInterviewError(null)
+      setInterviewLoadingId(personaId)
+      const result = await rebuttalInterview(id, personaId, message, history)
+      setChatHistory(prev => ({
+        ...prev,
+        [personaId]: [
+          ...(prev[personaId] ?? []),
+          { role: 'founder', message },
+          { role: 'persona', message: result.response?.reply || 'No reply provided.' },
+        ],
+      }))
+      setInterviewResponses(prev => ({
+        ...prev,
+        [personaId]: {
+          ...(prev[personaId] ?? {}),
+          ...result.response,
+        },
+      }))
+      setRebuttalMessage('')
+    } catch (err: any) {
+      setInterviewError(
+        err?.response?.data?.detail || err?.message || 'Rebuttal failed. Try again.'
+      )
+    } finally {
+      setInterviewLoadingId(null)
+    }
+  }
+
+  async function handleToggleTask(task: ExecutionTask, listType: 'checklist' | 'sprint') {
+    if (!id || !user) return
+    try {
+      setPlanUpdatingId(task.id)
+      const updated = await updateExecutionTask(id, task.id, listType, !task.completed)
+      setExecutionPlan(updated)
+    } catch (err: any) {
+      setPlanError(err?.response?.data?.detail || err?.message || 'Failed to update execution task')
+    } finally {
+      setPlanUpdatingId(null)
+    }
+  }
+
   useEffect(() => {
     if (!id || !user || authLoading) return
     fetchVerdict()
+  }, [id, user, authLoading])
+
+  useEffect(() => {
+    if (!id || !user || authLoading) return
+    loadPersonas()
   }, [id, user, authLoading])
 
   // Save verdict to Firestore when completed
@@ -157,6 +338,13 @@ export default function VerdictPage() {
       setVerdictSaved(true)
     }
   }, [data?.status, data?.verdict, verdictSaved, id, ideaTitle, user])
+
+  useEffect(() => {
+    if (!id || !user || authLoading) return
+    if (data?.status === 'completed') {
+      loadExecutionPlan()
+    }
+  }, [data?.status, id, user, authLoading])
 
   const statusBadgeVariant =
     data?.status === 'completed'
@@ -715,6 +903,305 @@ export default function VerdictPage() {
                             )}
                           </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 p-6 shadow-sm space-y-6">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span className="text-2xl">✅</span> Execution Mode
+                          </h4>
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
+                            Turn insights into action with a clear checklist and 7-day sprint.
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={loadExecutionPlan}
+                          className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                        >
+                          Refresh plan
+                        </Button>
+                      </div>
+
+                      {planLoading && (
+                        <div className="text-sm text-slate-500">Loading execution plan...</div>
+                      )}
+                      {planError && (
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                          {planError}
+                        </div>
+                      )}
+                      {!planLoading && !planError && executionPlan && (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <div className="space-y-3">
+                            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              De-Risk Checklist
+                            </div>
+                            {(executionPlan.checklist || []).map(task => (
+                              <label
+                                key={task.id}
+                                className="flex items-start gap-3 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-800/60 p-3 hover:shadow-sm transition"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={task.completed}
+                                  onChange={() => handleToggleTask(task, 'checklist')}
+                                  disabled={planUpdatingId === task.id}
+                                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                      {task.title || 'Checklist item'}
+                                    </span>
+                                    {task.priority && (
+                                      <Badge variant="secondary" className="text-[10px]">
+                                        {task.priority}
+                                      </Badge>
+                                    )}
+                                    {task.owner && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {task.owner}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  {task.rationale && (
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                                      {task.rationale}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                            {!executionPlan.checklist?.length && (
+                              <div className="text-sm text-slate-500">Checklist not ready yet.</div>
+                            )}
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                              7-Day Sprint Plan
+                            </div>
+                            {(executionPlan.sprint_plan || []).map(task => (
+                              <label
+                                key={task.id}
+                                className="flex items-start gap-3 rounded-lg border border-slate-200/70 dark:border-slate-700/70 bg-white dark:bg-slate-900/60 p-3 hover:shadow-sm transition"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={task.completed}
+                                  onChange={() => handleToggleTask(task, 'sprint')}
+                                  disabled={planUpdatingId === task.id}
+                                  className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs font-semibold text-indigo-600">
+                                      Day {task.day ?? '—'}
+                                    </span>
+                                    <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                      {task.task || 'Sprint task'}
+                                    </span>
+                                  </div>
+                                  {task.success_criteria && (
+                                    <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                                      ✓ {task.success_criteria}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                            {!executionPlan.sprint_plan?.length && (
+                              <div className="text-sm text-slate-500">Sprint plan not ready.</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/70 p-6 shadow-sm space-y-5">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span className="text-2xl">🎙️</span> Synthetic Interview Panel
+                          </h4>
+                          <p className="text-sm text-slate-600 dark:text-slate-300">
+                            Run persona interviews and rebut their concerns in real time.
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {personas.length} personas
+                        </Badge>
+                      </div>
+
+                      {interviewError && (
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                          {interviewError}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {personas.map(persona => {
+                          const response = interviewResponses[persona.id]
+                          const isActive = activePersonaId === persona.id
+                          return (
+                            <div
+                              key={persona.id}
+                              className="rounded-xl border border-slate-200/70 dark:border-slate-700/70 bg-slate-50 dark:bg-slate-800/60 p-4 space-y-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    {persona.name}
+                                  </p>
+                                  <p className="text-xs text-slate-500 dark:text-slate-300">
+                                    {persona.headline}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleRunInterview(persona.id)}
+                                  className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                                >
+                                  {interviewLoadingId === persona.id ? 'Running...' : 'Run'}
+                                </Button>
+                              </div>
+
+                              {response && (
+                                <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                                  {response.summary && (
+                                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                                      {response.summary}
+                                    </p>
+                                  )}
+                                  {!!limitList(response.reactions).length && (
+                                    <div>
+                                      <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                        Reactions
+                                      </p>
+                                      <ul className="list-disc list-inside space-y-1">
+                                        {limitList(response.reactions).map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {!!limitList(response.concerns).length && (
+                                    <div>
+                                      <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                        Concerns
+                                      </p>
+                                      <ul className="list-disc list-inside space-y-1">
+                                        {limitList(response.concerns).map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {response.willingness_to_pay && (
+                                    <div className="rounded-lg border border-emerald-200/70 bg-emerald-50/60 p-2 text-emerald-800">
+                                      <p className="font-semibold">
+                                        Will pay:{' '}
+                                        {response.willingness_to_pay.will_pay ? 'Yes' : 'No'}
+                                      </p>
+                                      {response.willingness_to_pay.price_range && (
+                                        <p>Range: {response.willingness_to_pay.price_range}</p>
+                                      )}
+                                      {response.willingness_to_pay.reason && (
+                                        <p>{response.willingness_to_pay.reason}</p>
+                                      )}
+                                    </div>
+                                  )}
+                                  {!!limitList(response.adoption_barriers).length && (
+                                    <div>
+                                      <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                        Adoption Barriers
+                                      </p>
+                                      <ul className="list-disc list-inside space-y-1">
+                                        {limitList(response.adoption_barriers).map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  {response.verdict && (
+                                    <Badge variant="secondary" className="text-[10px]">
+                                      Verdict: {response.verdict}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+
+                              {isActive && response && (
+                                <div className="space-y-2 border-t border-slate-200/60 pt-3">
+                                  <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                                    {(chatHistory[persona.id] || []).map((entry, idx) => (
+                                      <div
+                                        key={idx}
+                                        className={`rounded-lg px-3 py-2 ${
+                                          entry.role === 'founder'
+                                            ? 'bg-indigo-50 text-indigo-800'
+                                            : 'bg-slate-200/70 text-slate-700'
+                                        }`}
+                                      >
+                                        <span className="font-semibold">
+                                          {entry.role === 'founder' ? 'You' : persona.name}:
+                                        </span>{' '}
+                                        {entry.message}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <textarea
+                                    value={rebuttalMessage}
+                                    onChange={event => setRebuttalMessage(event.target.value)}
+                                    placeholder="Respond to this persona..."
+                                    rows={3}
+                                    className="w-full rounded-lg border border-slate-200/80 bg-white/90 px-3 py-2 text-xs text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleRebuttalSubmit(persona.id)}
+                                    disabled={interviewLoadingId === persona.id}
+                                    className="bg-gradient-to-r from-[var(--brand-gradient-start)] to-[var(--brand-gradient-end)] text-white"
+                                  >
+                                    {interviewLoadingId === persona.id
+                                      ? 'Sending...'
+                                      : 'Send rebuttal'}
+                                  </Button>
+                                  {response.bullets?.length ? (
+                                    <div className="text-xs text-slate-600 dark:text-slate-300">
+                                      <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                        Latest reaction
+                                      </p>
+                                      <ul className="list-disc list-inside">
+                                        {limitList(response.bullets).map((item, idx) => (
+                                          <li key={idx}>{item}</li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ) : null}
+                                  {response.follow_up_questions?.length ? (
+                                    <div className="text-xs text-slate-600 dark:text-slate-300">
+                                      <p className="font-semibold text-slate-700 dark:text-slate-200">
+                                        Follow-up questions
+                                      </p>
+                                      <ul className="list-disc list-inside">
+                                        {limitList(response.follow_up_questions).map(
+                                          (item, idx) => (
+                                            <li key={idx}>{item}</li>
+                                          )
+                                        )}
+                                      </ul>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   </CardContent>

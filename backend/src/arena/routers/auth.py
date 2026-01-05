@@ -70,6 +70,7 @@ async def _ensure_user_doc(decoded: Dict[str, Any], login_provider: str) -> Dict
             verified=decoded.get("email_verified", False),
             loginProvider=login_provider,
             credits=5,
+            interviewCredits=0,
         )
         await anyio.to_thread.run_sync(
             doc_ref.set,
@@ -135,6 +136,7 @@ async def signup(payload: SignupRequest, request: Request) -> Dict[str, Any]:
             verified=False,
             loginProvider="email",
             credits=5,
+            interviewCredits=0,
             stripeCustomerId=None,
             stripeSubscriptionId=None,
             stripePlan=None,

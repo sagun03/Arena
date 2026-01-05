@@ -41,6 +41,54 @@ export interface DebateVerdictResponse {
   last_updated?: string | null
 }
 
+export interface ExecutionTask {
+  id: string
+  title?: string
+  rationale?: string
+  priority?: string
+  owner?: string
+  day?: number
+  task?: string
+  success_criteria?: string
+  completed: boolean
+}
+
+export interface ExecutionPlan {
+  debate_id: string
+  checklist: ExecutionTask[]
+  sprint_plan: ExecutionTask[]
+}
+
+export interface InterviewPersona {
+  id: string
+  name: string
+  headline?: string
+  traits?: string[]
+  priorities?: string[]
+}
+
+export interface InterviewResponsePayload {
+  summary?: string
+  reactions?: string[]
+  concerns?: string[]
+  willingness_to_pay?: {
+    will_pay?: boolean
+    price_range?: string
+    reason?: string
+  }
+  adoption_barriers?: string[]
+  verdict?: string
+  reply?: string
+  bullets?: string[]
+  final_stance?: string
+  follow_up_questions?: string[]
+}
+
+export interface InterviewResult {
+  persona: InterviewPersona
+  response: InterviewResponsePayload
+}
+
 function normalizeVerdict(item: any): VerdictRecord {
   return {
     id: item.id ?? item.debate_id ?? item.debateId,
@@ -122,5 +170,56 @@ export async function getDebateState(debateId: string): Promise<DebateState> {
 
 export async function getDebateVerdict(debateId: string): Promise<DebateVerdictResponse> {
   const { data } = await apiClient.get<DebateVerdictResponse>(`/arena/debate/${debateId}/verdict`)
+  return data
+}
+
+export async function getExecutionPlan(debateId: string): Promise<ExecutionPlan> {
+  const { data } = await apiClient.get<ExecutionPlan>(`/arena/execution/${debateId}`)
+  return data
+}
+
+export async function updateExecutionTask(
+  debateId: string,
+  taskId: string,
+  taskType: 'checklist' | 'sprint',
+  completed: boolean
+): Promise<ExecutionPlan> {
+  const { data } = await apiClient.post<ExecutionPlan>(
+    `/arena/execution/${debateId}/tasks/${taskId}`,
+    {
+      task_type: taskType,
+      completed,
+    }
+  )
+  return data
+}
+
+export async function getInterviewPersonas(): Promise<InterviewPersona[]> {
+  const { data } = await apiClient.get<{ personas: InterviewPersona[] }>(
+    '/arena/interviews/personas'
+  )
+  return data?.personas ?? []
+}
+
+export async function runInterview(debateId: string, personaId: string): Promise<InterviewResult> {
+  const { data } = await apiClient.post<InterviewResult>('/arena/interviews/run', {
+    debate_id: debateId,
+    persona_id: personaId,
+  })
+  return data
+}
+
+export async function rebuttalInterview(
+  debateId: string,
+  personaId: string,
+  message: string,
+  history: Array<{ role: string; message: string }>
+): Promise<InterviewResult> {
+  const { data } = await apiClient.post<InterviewResult>('/arena/interviews/rebuttal', {
+    debate_id: debateId,
+    persona_id: personaId,
+    message,
+    history,
+  })
   return data
 }
